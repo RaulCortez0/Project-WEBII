@@ -1,5 +1,18 @@
+<<<<<<< HEAD
 import { Link } from "react-router-dom";
 import "./Home.css";
+=======
+function Home() {
+  return (
+    <div>
+      <h1>Página de Inicio</h1>
+      <p>Bienvenido a mi aplicación</p>
+
+      <h2>TU MAMA</h2>
+    </div>
+  )
+}
+>>>>>>> fa85c82e363d6642a8b4b4ebccbd839b4b6cc00b
 
 const Home = () => {
   const tournaments = [
