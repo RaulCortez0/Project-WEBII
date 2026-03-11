@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 
 const Login = () => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: "",
     password: ""
@@ -13,26 +15,21 @@ const Login = () => {
     password: ""
   });
 
+  const [apiError, setApiError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name as keyof typeof errors]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ""
-      }));
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
+    setApiError("");
   };
 
   const validateForm = () => {
     let isValid = true;
-    const newErrors = {
-      email: "",
-      password: ""
-    };
+    const newErrors = { email: "", password: "" };
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email) {
@@ -52,11 +49,40 @@ const Login = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      console.log("Login:", formData);
-      alert("¡Login exitoso!");
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setApiError("");
+
+    try {
+      const response = await fetch("http://localhost:3001/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setApiError(data.error || "Error al iniciar sesión");
+        return;
+      }
+
+      // Guardar el usuario en sessionStorage para usarlo en la app
+      sessionStorage.setItem("user", JSON.stringify(data.user));
+
+      // Redirigir al home
+      navigate("/");
+    } catch (err) {
+      setApiError("No se pudo conectar al servidor. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,10 +93,10 @@ const Login = () => {
           <h1>BRACKETCORE</h1>
           <h2>Bienvenido de vuelta</h2>
           <p>
-            Accede a tu cuenta para gestionar tus torneos, 
+            Accede a tu cuenta para gestionar tus torneos,
             ver estadísticas y conectar con la comunidad.
           </p>
-          
+
           <div className="login-features">
             <div className="feature">
               <span className="feature-icon">🏆</span>
@@ -79,7 +105,6 @@ const Login = () => {
                 <p>Administra todos tus torneos en un lugar</p>
               </div>
             </div>
-            
             <div className="feature">
               <span className="feature-icon">📈</span>
               <div>
@@ -93,7 +118,14 @@ const Login = () => {
         <div className="login-right">
           <form onSubmit={handleSubmit} className="login-form">
             <h2>Iniciar sesión</h2>
-            
+
+            {/* Error general del API */}
+            {apiError && (
+              <div className="api-error-message">
+                {apiError}
+              </div>
+            )}
+
             <div className="form-group">
               <label htmlFor="email">Email</label>
               <input
@@ -130,8 +162,12 @@ const Login = () => {
               <a href="#" className="forgot-password">¿Olvidaste tu contraseña?</a>
             </div>
 
-            <button type="submit" className="login-submit-btn">
-              INICIAR SESIÓN
+            <button
+              type="submit"
+              className="login-submit-btn"
+              disabled={loading}
+            >
+              {loading ? "ENTRANDO..." : "INICIAR SESIÓN"}
             </button>
 
             <div className="login-register">

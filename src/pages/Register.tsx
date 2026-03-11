@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Register.css";
 
 const Register = () => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -17,31 +19,22 @@ const Register = () => {
     confirmPassword: ""
   });
 
+  const [apiError, setApiError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Limpiar error del campo cuando el usuario empieza a escribir
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name as keyof typeof errors]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ""
-      }));
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
+    setApiError("");
   };
 
   const validateForm = () => {
     let isValid = true;
-    const newErrors = {
-      username: "",
-      email: "",
-      password: "",
-      confirmPassword: ""
-    };
+    const newErrors = { username: "", email: "", password: "", confirmPassword: "" };
 
-    // Validar username
     if (!formData.username.trim()) {
       newErrors.username = "El nombre de usuario es requerido";
       isValid = false;
@@ -50,7 +43,6 @@ const Register = () => {
       isValid = false;
     }
 
-    // Validar email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email) {
       newErrors.email = "El email es requerido";
@@ -60,7 +52,6 @@ const Register = () => {
       isValid = false;
     }
 
-    // Validar password
     if (!formData.password) {
       newErrors.password = "La contraseña es requerida";
       isValid = false;
@@ -69,7 +60,6 @@ const Register = () => {
       isValid = false;
     }
 
-    // Validar confirmación de password
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = "Confirma tu contraseña";
       isValid = false;
@@ -82,13 +72,39 @@ const Register = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (validateForm()) {
-      console.log("Formulario válido:", formData);
-      // Aquí iría la llamada a tu API de registro
-      alert("¡Registro exitoso!");
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setApiError("");
+
+    try {
+      const response = await fetch("http://localhost:3001/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setApiError(data.error || "Error al registrarse");
+        return;
+      }
+
+      // Registro exitoso — redirigir al login
+      alert("¡Cuenta creada exitosamente! Por favor inicia sesión.");
+      navigate("/login");
+    } catch (err) {
+      setApiError("No se pudo conectar al servidor. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -102,7 +118,7 @@ const Register = () => {
             Crea tu cuenta gratis y comienza a gestionar torneos,
             participar en competencias y conectar con jugadores de todo el mundo.
           </p>
-          
+
           <div className="register-features">
             <div className="feature">
               <span className="feature-icon">🎮</span>
@@ -111,7 +127,6 @@ const Register = () => {
                 <p>Organiza torneos de cualquier tamaño</p>
               </div>
             </div>
-            
             <div className="feature">
               <span className="feature-icon">📊</span>
               <div>
@@ -119,7 +134,6 @@ const Register = () => {
                 <p>Sigue el progreso de tus torneos</p>
               </div>
             </div>
-            
             <div className="feature">
               <span className="feature-icon">🌍</span>
               <div>
@@ -133,7 +147,14 @@ const Register = () => {
         <div className="register-right">
           <form onSubmit={handleSubmit} className="register-form">
             <h2>Crear cuenta</h2>
-            
+
+            {/* Error general del API */}
+            {apiError && (
+              <div className="api-error-message">
+                {apiError}
+              </div>
+            )}
+
             <div className="form-group">
               <label htmlFor="username">Nombre de usuario</label>
               <input
@@ -198,12 +219,16 @@ const Register = () => {
               </label>
             </div>
 
-            <button type="submit" className="register-submit-btn">
-              REGISTRARSE
+            <button
+              type="submit"
+              className="register-submit-btn"
+              disabled={loading}
+            >
+              {loading ? "REGISTRANDO..." : "REGISTRARSE"}
             </button>
 
             <div className="register-login">
-                ¿Ya tienes cuenta? <Link to="/login">Inicia sesión</Link>
+              ¿Ya tienes cuenta? <Link to="/login">Inicia sesión</Link>
             </div>
 
             <div className="register-divider">
@@ -211,12 +236,8 @@ const Register = () => {
             </div>
 
             <div className="social-register">
-              <button type="button" className="social-btn google">
-                Google
-              </button>
-              <button type="button" className="social-btn github">
-                GitHub
-              </button>
+              <button type="button" className="social-btn google">Google</button>
+              <button type="button" className="social-btn github">GitHub</button>
             </div>
           </form>
         </div>
