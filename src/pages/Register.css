@@ -1,0 +1,270 @@
+.register-page {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 5%;
+}
+
+.register-container {
+  display: flex;
+  max-width: 1200px;
+  width: 100%;
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid #2a2a4a;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Lado izquierdo */
+.register-left {
+  flex: 1;
+  padding: 50px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+}
+
+.register-left h1 {
+  font-size: 32px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #00ccff, #9d4edd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.register-left h2 {
+  font-size: 28px;
+  color: white;
+  margin-bottom: 15px;
+}
+
+.register-left p {
+  color: #b0b0c0;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+.register-features {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.feature {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.feature-icon {
+  font-size: 24px;
+  background: rgba(0, 204, 255, 0.1);
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.feature h4 {
+  color: white;
+  margin-bottom: 5px;
+  font-size: 16px;
+}
+
+.feature p {
+  color: #b0b0c0;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+/* Lado derecho */
+.register-right {
+  flex: 1;
+  padding: 50px;
+}
+
+.register-form h2 {
+  color: white;
+  margin-bottom: 30px;
+  font-size: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #b0b0c0;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 15px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  transition: 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #00ccff;
+  box-shadow: 0 0 0 2px rgba(0, 204, 255, 0.1);
+}
+
+.form-group input.error {
+  border-color: #ff4d4d;
+}
+
+.error-message {
+  display: block;
+  color: #ff4d4d;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.form-terms {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.form-terms input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #00ccff;
+}
+
+.form-terms label {
+  color: #b0b0c0;
+  font-size: 14px;
+}
+
+.form-terms a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+.form-terms a:hover {
+  color: #9d4edd;
+}
+
+.register-submit-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #00ccff, #7b2cbf);
+  border: none;
+  border-radius: 30px;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+  margin-bottom: 20px;
+}
+
+.register-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0, 204, 255, 0.4);
+}
+
+.register-login {
+  text-align: center;
+  color: #b0b0c0;
+  font-size: 14px;
+  margin-bottom: 25px;
+}
+
+.register-login a {
+  color: #00ccff;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.register-login a:hover {
+  color: #9d4edd;
+}
+
+.register-divider {
+  position: relative;
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.register-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #2a2a4a;
+}
+
+.register-divider span {
+  position: relative;
+  background: #0f0f1a;
+  padding: 0 15px;
+  color: #b0b0c0;
+  font-size: 14px;
+}
+
+.social-register {
+  display: flex;
+  gap: 15px;
+}
+
+.social-btn {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.social-btn.google:hover {
+  background: rgba(0, 204, 255, 0.1);
+  border-color: #00ccff;
+}
+
+.social-btn.github:hover {
+  background: rgba(157, 78, 221, 0.1);
+  border-color: #9d4edd;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .register-container {
+    flex-direction: column;
+  }
+  
+  .register-left, .register-right {
+    padding: 40px;
+  }
+}
+
+@media (max-width: 500px) {
+  .register-page {
+    padding: 80px 20px;
+  }
+  
+  .register-left, .register-right {
+    padding: 30px 20px;
+  }
+  
+  .social-register {
+    flex-direction: column;
+  }
+}
