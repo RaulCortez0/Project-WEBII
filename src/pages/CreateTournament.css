@@ -1,0 +1,340 @@
+.create-tournament {
+  width: 100%;
+  background: #0a0a0f;
+  color: white;
+  font-family: sans-serif;
+  min-height: 100vh;
+}
+
+/* Hero Section - Ahora con altura completa como About */
+.create-hero {
+  width: 100%;
+  height: 100vh;
+  background-image: url('/BC_Logo.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+}
+
+.create-hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(26, 26, 46, 0.85));
+}
+
+.create-hero-content {
+  position: relative;
+  z-index: 2;
+  padding: 0 5%;
+  max-width: 900px;
+  animation: fadeInUp 0.8s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.create-hero h1 {
+  font-size: 56px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #00ccff, #9d4edd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.create-hero p {
+  font-size: 20px;
+  color: #e0e0e0;
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Form Section */
+.create-form-section {
+  max-width: 900px;
+  margin: 60px auto;
+  padding: 0 5%;
+}
+
+.form-container {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 20px;
+  padding: 40px;
+  border: 1px solid #2a2a4a;
+}
+
+/* Success Message */
+.success-message {
+  background: rgba(0, 204, 255, 0.1);
+  border: 2px solid #00ccff;
+  border-radius: 16px;
+  padding: 30px;
+  text-align: center;
+  margin-bottom: 30px;
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.success-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.success-message h3 {
+  font-size: 24px;
+  color: #00ccff;
+  margin-bottom: 10px;
+}
+
+.success-message p {
+  color: #b0b0c0;
+}
+
+/* Form Styles */
+.tournament-form {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.form-group.full-width {
+  width: 100%;
+  flex: 100%;
+}
+
+.form-group label {
+  display: block;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px 15px;
+  background: #0a0a0f;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  transition: 0.2s;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #00ccff;
+  box-shadow: 0 0 0 2px rgba(0, 204, 255, 0.1);
+}
+
+.form-group input.error,
+.form-group select.error {
+  border-color: #ff6b6b;
+}
+
+.error-message {
+  display: block;
+  color: #ff6b6b;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 20px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.cancel-btn {
+  padding: 12px 30px;
+  background: transparent;
+  border: 2px solid #ff6b6b;
+  border-radius: 30px;
+  color: #ff6b6b;
+  text-decoration: none;
+  font-weight: bold;
+  transition: 0.2s;
+  text-align: center;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 107, 107, 0.1);
+  transform: translateY(-2px);
+}
+
+.submit-btn {
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #00ccff, #7b2cbf);
+  border: none;
+  border-radius: 30px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0, 204, 255, 0.4);
+}
+
+/* Tips Section */
+.create-tips {
+  max-width: 1400px;
+  margin: 60px auto 80px;
+  padding: 0 5%;
+  text-align: center;
+}
+
+.create-tips h2 {
+  font-size: 36px;
+  margin-bottom: 40px;
+  background: linear-gradient(135deg, #00ccff, #9d4edd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.tip-card {
+  background: #1a1a2e;
+  padding: 30px;
+  border-radius: 16px;
+  border: 1px solid #2a2a4a;
+  transition: 0.2s;
+}
+
+.tip-card:hover {
+  transform: translateY(-5px);
+  border-color: #00ccff;
+}
+
+.tip-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.tip-card h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: white;
+}
+
+.tip-card p {
+  color: #b0b0c0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .create-hero {
+    height: 80vh;
+    background-attachment: scroll;
+  }
+  
+  .create-hero h1 {
+    font-size: 40px;
+  }
+  
+  .create-hero p {
+    font-size: 18px;
+  }
+  
+  .form-container {
+    padding: 25px;
+  }
+  
+  .create-tips h2 {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 600px) {
+  .create-hero {
+    height: 70vh;
+  }
+  
+  .create-hero h1 {
+    font-size: 32px;
+  }
+  
+  .create-hero p {
+    font-size: 16px;
+  }
+  
+  .form-container {
+    padding: 20px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .cancel-btn, .submit-btn {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
+}
