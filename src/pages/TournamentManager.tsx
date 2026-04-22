@@ -1,29 +1,51 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { tournamentsData } from "./AllTournaments";
 import "./TournamentManager.css";
+
+const API_URL = "http://localhost:3001";
 
 const TournamentManager = () => {
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth(); // sesión real desde el contexto
+  const { isLoggedIn, user } = useAuth();
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showLoginWarning, setShowLoginWarning] = useState(false);
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const getTournamentStatus = (tournament: typeof tournamentsData[0]) => {
+  // Cargar torneos desde la API
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
+
+  const fetchTournaments = async () => {
+    try {
+      const response = await fetch(`${API_URL}/torneos`);
+      if (response.ok) {
+        const data = await response.json();
+        setTournaments(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar torneos:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getTournamentStatus = (tournament: any) => {
     const currentDate = new Date();
     const endDate = new Date(tournament.endDate);
     const isDateExpired = currentDate > endDate;
     const isFull = tournament.registeredPlayers >= tournament.players;
 
     if (isDateExpired) return "Torneo finalizado";
-    if (isFull || tournament.status === "full") return "Torneo cerrado - Cupo lleno";
+    if (isFull || tournament.status === 'finalizado') return "Torneo cerrado - Cupo lleno";
     const availableSpots = tournament.players - tournament.registeredPlayers;
     return `Disponible - ${availableSpots} cupos`;
   };
 
   const getRecentTournaments = () => {
-    return [...tournamentsData]
+    return [...tournaments]
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
       .slice(0, 3)
       .map(tournament => ({
@@ -31,9 +53,9 @@ const TournamentManager = () => {
         name: tournament.name,
         game: tournament.game,
         players: tournament.players,
-        startDate: new Date(tournament.startDate).toLocaleDateString("es-ES", {
+        startDate: tournament.startDate ? new Date(tournament.startDate).toLocaleDateString("es-ES", {
           day: "2-digit", month: "2-digit", year: "numeric"
-        }),
+        }) : "Fecha por definir",
         status: getTournamentStatus(tournament),
         participants: tournament.registeredPlayers,
         totalPlayers: tournament.players
@@ -126,43 +148,49 @@ const TournamentManager = () => {
           <Link to="/torneos" className="view-all-link">Ver todos →</Link>
         </div>
 
-        <div className="tournaments-grid">
-          {activeTournaments.map((tournament) => (
-            <div className={`tournament-card-active ${getStatusClass(tournament.status)}`} key={tournament.id}>
-              <div className={`tournament-status ${getStatusClass(tournament.status)}`}>
-                {tournament.status}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "40px", color: "#b0b0c0" }}>
+            <p>Cargando torneos...</p>
+          </div>
+        ) : (
+          <div className="tournaments-grid">
+            {activeTournaments.map((tournament) => (
+              <div className={`tournament-card-active ${getStatusClass(tournament.status)}`} key={tournament.id}>
+                <div className={`tournament-status ${getStatusClass(tournament.status)}`}>
+                  {tournament.status}
+                </div>
+                <h3>{tournament.name}</h3>
+                <div className="tournament-details">
+                  <div className="detail-item">
+                    <span className="detail-label">🎮 Juego:</span>
+                    <span>{tournament.game || "Por definir"}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">👥 Jugadores:</span>
+                    <span>{tournament.players}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">📅 Inicio:</span>
+                    <span>{tournament.startDate}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">✅ Inscritos:</span>
+                    <span>{tournament.participants}/{tournament.totalPlayers}</span>
+                  </div>
+                </div>
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${Math.min((tournament.participants / tournament.totalPlayers) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <Link to="/torneos" className="view-tournament-link">
+                  Ver Torneo
+                </Link>
               </div>
-              <h3>{tournament.name}</h3>
-              <div className="tournament-details">
-                <div className="detail-item">
-                  <span className="detail-label">🎮 Juego:</span>
-                  <span>{tournament.game}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">👥 Jugadores:</span>
-                  <span>{tournament.players}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">📅 Inicio:</span>
-                  <span>{tournament.startDate}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">✅ Inscritos:</span>
-                  <span>{tournament.participants}/{tournament.totalPlayers}</span>
-                </div>
-              </div>
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${(tournament.participants / tournament.totalPlayers) * 100}%` }}
-                ></div>
-              </div>
-              <Link to="/torneos" className="view-tournament-link">
-                Ver Torneo
-              </Link>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="info-section">

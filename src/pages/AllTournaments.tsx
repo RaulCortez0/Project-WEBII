@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./AllTournaments.css";
 
 export interface Tournament {
@@ -11,110 +12,76 @@ export interface Tournament {
   registeredPlayers: number;
   startDate: string;
   endDate: string;
-  status: "open" | "closed" | "full";
-  image?: string;
+  status: string;
+  description?: string;
+  prize?: string;
+  rules?: string;
+  createdBy?: number;
 }
 
-// Exportamos los torneos para usarlos en TournamentManager
-export const tournamentsData: Tournament[] = [
-  {
-    id: 1,
-    name: "League of Legends Championship",
-    game: "League of Legends",
-    type: "Eliminación Simple",
-    players: 32,
-    registeredPlayers: 32,
-    startDate: "2026-04-15",
-    endDate: "2026-04-20",
-    status: "full"
-  },
-  {
-    id: 2,
-    name: "Valorant Masters",
-    game: "Valorant",
-    type: "Doble Eliminación",
-    players: 16,
-    registeredPlayers: 12,
-    startDate: "2026-04-20",
-    endDate: "2026-04-25",
-    status: "open"
-  },
-  {
-    id: 3,
-    name: "CS2 Global Cup",
-    game: "Counter-Strike 2",
-    type: "Eliminación Simple",
-    players: 64,
-    registeredPlayers: 64,
-    startDate: "2026-04-10",
-    endDate: "2026-04-18",
-    status: "full"
-  },
-  {
-    id: 4,
-    name: "FIFA World Tournament",
-    game: "EA FC 25",
-    type: "Liga",
-    players: 128,
-    registeredPlayers: 45,
-    startDate: "2026-05-01",
-    endDate: "2026-05-10",
-    status: "open"
-  },
-  {
-    id: 5,
-    name: "Rocket League Cup",
-    game: "Rocket League",
-    type: "Doble Eliminación",
-    players: 24,
-    registeredPlayers: 18,
-    startDate: "2026-04-25",
-    endDate: "2026-04-30",
-    status: "open"
-  },
-  {
-    id: 6,
-    name: "Dota 2 International",
-    game: "Dota 2",
-    type: "Eliminación Simple",
-    players: 48,
-    registeredPlayers: 48,
-    startDate: "2026-04-05",
-    endDate: "2026-04-12",
-    status: "closed"
-  },
-  {
-    id: 7,
-    name: "Smash Bros Ultimate",
-    game: "Super Smash Bros",
-    type: "Eliminación Simple",
-    players: 32,
-    registeredPlayers: 20,
-    startDate: "2026-05-05",
-    endDate: "2026-05-08",
-    status: "open"
-  },
-  {
-    id: 8,
-    name: "Overwatch 2 League",
-    game: "Overwatch 2",
-    type: "Liga",
-    players: 20,
-    registeredPlayers: 20,
-    startDate: "2026-04-08",
-    endDate: "2026-04-22",
-    status: "full"
-  }
-];
+const API_URL = "http://localhost:3001";
 
 const AllTournaments = () => {
+  const { user, isLoggedIn } = useAuth();
   const [showFilters, setShowFilters] = useState(false);
   const [searchGame, setSearchGame] = useState("");
   const [sortOrder, setSortOrder] = useState<"recent" | "oldest">("recent");
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Cargar torneos desde la API
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
+
+  const fetchTournaments = async () => {
+    try {
+      const response = await fetch(`${API_URL}/torneos`);
+      if (!response.ok) throw new Error("Error al cargar torneos");
+      const data = await response.json();
+      setTournaments(data);
+    } catch (err) {
+      setError("No se pudieron cargar los torneos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Inscribirse a un torneo
+  const handleRegister = async (tournamentId: number) => {
+    if (!isLoggedIn) {
+      alert("Debes iniciar sesión para inscribirte");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/inscripciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usuario_id: user?.id,
+          torneo_id: tournamentId
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Error al inscribirse");
+        return;
+      }
+
+      alert("¡Inscripción exitosa!");
+      fetchTournaments(); // Recargar para actualizar contadores
+    } catch (err) {
+      alert("Error al conectar con el servidor");
+    }
+  };
 
   // Filtrar torneos por juego
-  const filteredTournaments = tournamentsData.filter(tournament =>
-    tournament.game.toLowerCase().includes(searchGame.toLowerCase())
+  const filteredTournaments = tournaments.filter(tournament =>
+    tournament.game?.toLowerCase().includes(searchGame.toLowerCase())
   );
 
   // Ordenar torneos por fecha
@@ -127,6 +94,7 @@ const AllTournaments = () => {
   });
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "Fecha por definir";
     const date = new Date(dateString);
     return date.toLocaleDateString("es-ES", {
       day: "2-digit",
@@ -147,7 +115,7 @@ const AllTournaments = () => {
         className: "status-closed",
         available: false
       };
-    } else if (isFull || tournament.status === "full") {
+    } else if (isFull) {
       return {
         message: "Torneo cerrado - Cupo lleno",
         className: "status-full",
@@ -163,9 +131,20 @@ const AllTournaments = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <main className="all-tournaments">
+        <div className="loading-container" style={{ textAlign: "center", padding: "100px", color: "white" }}>
+          <div className="loading-spinner" style={{ fontSize: 48, marginBottom: 20 }}>⏳</div>
+          <p>Cargando torneos...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="all-tournaments">
-      {/* Hero Section con imagen de fondo como en TournamentManager */}
+      {/* Hero Section */}
       <section className="tournaments-hero">
         <div className="tournaments-hero-overlay"></div>
         <div className="tournaments-hero-content">
@@ -235,8 +214,21 @@ const AllTournaments = () => {
       {/* Resultados */}
       <section className="tournaments-results">
         <div className="results-header">
-          <h2>Torreos encontrados: {sortedTournaments.length}</h2>
+          <h2>Torneos encontrados: {sortedTournaments.length}</h2>
         </div>
+
+        {error && (
+          <div className="error-banner" style={{ 
+            background: "rgba(255, 107, 107, 0.1)", 
+            border: "1px solid #ff6b6b", 
+            padding: "20px", 
+            borderRadius: "10px", 
+            marginBottom: "20px",
+            color: "#ff6b6b"
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
 
         <div className="tournaments-list">
           {sortedTournaments.length > 0 ? (
@@ -254,11 +246,11 @@ const AllTournaments = () => {
                   <div className="tournament-item-details">
                     <div className="detail">
                       <span className="detail-icon">🎮</span>
-                      <span>{tournament.game}</span>
+                      <span>{tournament.game || "Juego por definir"}</span>
                     </div>
                     <div className="detail">
                       <span className="detail-icon">🏆</span>
-                      <span>{tournament.type}</span>
+                      <span>{tournament.type || "Formato por definir"}</span>
                     </div>
                     <div className="detail">
                       <span className="detail-icon">👥</span>
@@ -272,13 +264,19 @@ const AllTournaments = () => {
                       <span className="detail-icon">🏁</span>
                       <span>Fin: {formatDate(tournament.endDate)}</span>
                     </div>
+                    {tournament.prize && (
+                      <div className="detail">
+                        <span className="detail-icon">🎁</span>
+                        <span>{tournament.prize}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="progress-container">
                     <div className="progress-bar">
                       <div 
                         className="progress-fill" 
-                        style={{ width: `${(tournament.registeredPlayers / tournament.players) * 100}%` }}
+                        style={{ width: `${Math.min((tournament.registeredPlayers / tournament.players) * 100, 100)}%` }}
                       ></div>
                     </div>
                     <span className="progress-text">
@@ -288,15 +286,18 @@ const AllTournaments = () => {
 
                   <div className="tournament-item-footer">
                     {statusInfo.available ? (
-                      <Link to={`/torneo/${tournament.id}`} className="register-btn">
+                      <button 
+                        className="register-btn"
+                        onClick={() => handleRegister(tournament.id)}
+                      >
                         Inscribirse
-                      </Link>
+                      </button>
                     ) : (
                       <button className="register-btn disabled" disabled>
                         {statusInfo.message}
                       </button>
                     )}
-                    <Link to={`/torneo/${tournament.id}/ver`} className="view-btn">
+                    <Link to={`/torneo/${tournament.id}`} className="view-btn">
                       Ver detalles
                     </Link>
                   </div>

@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./CreateTournament.css";
+
+interface Game {
+  id: number;
+  nombre_juego: string;
+  genero: string;
+  plataforma: string;
+}
 
 interface TournamentForm {
   title: string;
-  game: string;
+  gameId: string;
   gameType: string;
   eliminationType: string;
   maxPlayers: string;
@@ -15,11 +23,15 @@ interface TournamentForm {
   prize: string;
 }
 
+const API_URL = "http://localhost:3001";
+
 const CreateTournament = () => {
   const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const [games, setGames] = useState<Game[]>([]);
   const [formData, setFormData] = useState<TournamentForm>({
     title: "",
-    game: "",
+    gameId: "",
     gameType: "",
     eliminationType: "simple",
     maxPlayers: "16",
@@ -32,25 +44,24 @@ const CreateTournament = () => {
 
   const [errors, setErrors] = useState<Partial<TournamentForm>>({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const gamesList = [
-    "League of Legends",
-    "Valorant",
-    "Counter-Strike 2",
-    "Dota 2",
-    "Fortnite",
-    "Rocket League",
-    "EA FC 25",
-    "Call of Duty",
-    "Overwatch 2",
-    "Apex Legends",
-    "Super Smash Bros",
-    "Street Fighter 6",
-    "Rainbow Six Siege",
-    "Minecraft",
-    "Clash Royale",
-    "Otro"
-  ];
+  // Cargar videojuegos desde la API
+  useEffect(() => {
+    fetchGames();
+  }, []);
+
+  const fetchGames = async () => {
+    try {
+      const response = await fetch(`${API_URL}/videojuegos`);
+      if (response.ok) {
+        const data = await response.json();
+        setGames(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar juegos:", err);
+    }
+  };
 
   const gameTypes = [
     "MOBA",
@@ -101,8 +112,8 @@ const CreateTournament = () => {
       isValid = false;
     }
 
-    if (!formData.game) {
-      newErrors.game = "Selecciona un juego";
+    if (!formData.gameId) {
+      newErrors.gameId = "Selecciona un juego";
       isValid = false;
     }
 
@@ -136,19 +147,53 @@ const CreateTournament = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      // Convertir maxPlayers a número para enviar a la API
-      const tournamentToSend = {
-        ...formData,
-        maxPlayers: parseInt(formData.maxPlayers, 10)
-      };
-      console.log("Torneo creado:", tournamentToSend);
+    
+    if (!isLoggedIn) {
+      alert("Debes iniciar sesión para crear un torneo");
+      navigate("/login");
+      return;
+    }
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/torneos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: formData.title,
+          juego_id: parseInt(formData.gameId),
+          fecha_inicio: formData.startDate,
+          fecha_fin: formData.endDate,
+          max_participantes: parseInt(formData.maxPlayers),
+          descripcion: formData.description,
+          formato: eliminationTypes.find(t => t.value === formData.eliminationType)?.label || formData.eliminationType,
+          premio: formData.prize,
+          reglas: formData.rules,
+          creado_por: user?.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Error al crear el torneo");
+        setLoading(false);
+        return;
+      }
+
       setShowSuccess(true);
       setTimeout(() => {
         navigate("/torneos");
       }, 2000);
+    } catch (err) {
+      alert("Error al conectar con el servidor");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -191,20 +236,20 @@ const CreateTournament = () => {
 
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="game">Juego *</label>
+                <label htmlFor="gameId">Juego *</label>
                 <select
-                  id="game"
-                  name="game"
-                  value={formData.game}
+                  id="gameId"
+                  name="gameId"
+                  value={formData.gameId}
                   onChange={handleChange}
-                  className={errors.game ? "error" : ""}
+                  className={errors.gameId ? "error" : ""}
                 >
                   <option value="">Selecciona un juego</option>
-                  {gamesList.map(game => (
-                    <option key={game} value={game}>{game}</option>
+                  {games.map(game => (
+                    <option key={game.id} value={game.id}>{game.nombre_juego}</option>
                   ))}
                 </select>
-                {errors.game && <span className="error-message">{errors.game}</span>}
+                {errors.gameId && <span className="error-message">{errors.gameId}</span>}
               </div>
 
               <div className="form-group">
@@ -329,7 +374,9 @@ const CreateTournament = () => {
 
             <div className="form-actions">
               <Link to="/torneos" className="cancel-btn">Cancelar</Link>
-              <button type="submit" className="submit-btn">Crear Torneo</button>
+              <button type="submit" className="submit-btn" disabled={loading}>
+                {loading ? "CREANDO..." : "Crear Torneo"}
+              </button>
             </div>
           </form>
         </div>

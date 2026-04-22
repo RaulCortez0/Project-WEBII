@@ -9,6 +9,7 @@ import TournamentManager from "./pages/TournamentManager";
 import AllTournaments from "./pages/AllTournaments";
 import CreateTournament from "./pages/CreateTournament";
 import EditTournament from "./pages/EditTournament";
+import TournamentDetail from "./pages/TournamentDetail";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import GuestRoute from "./components/GuestRoute";
@@ -24,6 +25,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/torneos" element={<AllTournaments />} />
+          <Route path="/torneo/:id" element={<TournamentDetail />} /> {/* NUEVO */}
 
           {/* Solo para usuarios NO autenticados */}
           <Route

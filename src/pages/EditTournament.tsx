@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./EditTournament.css";
+
+interface Game {
+  id: number;
+  nombre_juego: string;
+}
 
 interface TournamentForm {
   id: number;
   title: string;
-  game: string;
+  gameId: string;
   gameType: string;
   eliminationType: string;
   maxPlayers: string;
@@ -14,67 +20,21 @@ interface TournamentForm {
   description: string;
   rules: string;
   prize: string;
+  status: string;
 }
 
-// Datos de torneos creados por el usuario (simulado)
-// En una aplicación real, esto vendría de una API con el ID del usuario
-const getUserTournaments = () => {
-  // Simulamos que el usuario actual tiene ID 1
-  const currentUserId = 1;
-  
-  // Torneos creados por el usuario (filtrados)
-  const allTournaments = [
-    {
-      id: 1,
-      name: "League of Legends Championship",
-      game: "League of Legends",
-      type: "Eliminación Simple",
-      players: 32,
-      startDate: "2026-04-15",
-      endDate: "2026-04-20",
-      description: "Torneo oficial de League of Legends",
-      rules: "Reglas estándar",
-      prize: "$500 USD",
-      createdBy: 1
-    },
-    {
-      id: 2,
-      name: "Valorant Masters",
-      game: "Valorant",
-      type: "Doble Eliminación",
-      players: 16,
-      startDate: "2026-04-20",
-      endDate: "2026-04-25",
-      description: "Torneo de Valorant para la comunidad",
-      rules: "Reglas competitivas",
-      prize: "$300 USD",
-      createdBy: 1
-    },
-    {
-      id: 5,
-      name: "Rocket League Cup",
-      game: "Rocket League",
-      type: "Doble Eliminación",
-      players: 24,
-      startDate: "2026-04-25",
-      endDate: "2026-04-30",
-      description: "Copa de Rocket League",
-      rules: "Reglas estándar",
-      prize: "$200 USD",
-      createdBy: 2 // Este es de otro usuario, no se muestra
-    }
-  ];
-  
-  return allTournaments.filter(t => t.createdBy === currentUserId);
-};
+const API_URL = "http://localhost:3001";
 
 const EditTournament = () => {
   const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const [userTournaments, setUserTournaments] = useState<any[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
   const [formData, setFormData] = useState<TournamentForm>({
     id: 0,
     title: "",
-    game: "",
+    gameId: "",
     gameType: "",
     eliminationType: "simple",
     maxPlayers: "16",
@@ -82,48 +42,51 @@ const EditTournament = () => {
     endDate: "",
     description: "",
     rules: "",
-    prize: ""
+    prize: "",
+    status: "abierto"
   });
   const [errors, setErrors] = useState<Partial<TournamentForm>>({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Obtener torneos del usuario actual
-  const userTournaments = getUserTournaments();
+  // Cargar torneos del usuario y juegos
+  useEffect(() => {
+    if (isLoggedIn && user?.id) {
+      fetchUserTournaments();
+      fetchGames();
+    }
+  }, [isLoggedIn, user]);
+
+  const fetchUserTournaments = async () => {
+    try {
+      const response = await fetch(`${API_URL}/torneos/usuario/${user?.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUserTournaments(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar torneos:", err);
+    }
+  };
+
+  const fetchGames = async () => {
+    try {
+      const response = await fetch(`${API_URL}/videojuegos`);
+      if (response.ok) {
+        const data = await response.json();
+        setGames(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar juegos:", err);
+    }
+  };
+
   const hasTournaments = userTournaments.length > 0;
 
-  // Lista de juegos disponibles
-  const gamesList = [
-    "League of Legends",
-    "Valorant",
-    "Counter-Strike 2",
-    "Dota 2",
-    "Fortnite",
-    "Rocket League",
-    "EA FC 25",
-    "Call of Duty",
-    "Overwatch 2",
-    "Apex Legends",
-    "Super Smash Bros",
-    "Street Fighter 6",
-    "Rainbow Six Siege",
-    "Minecraft",
-    "Clash Royale",
-    "Otro"
-  ];
-
-  // Tipos de juego
   const gameTypes = [
-    "MOBA",
-    "FPS",
-    "Battle Royale",
-    "Deportes",
-    "Lucha",
-    "Estrategia",
-    "Carreras",
-    "Otro"
+    "MOBA", "FPS", "Battle Royale", "Deportes", "Lucha", "Estrategia", "Carreras", "Otro"
   ];
 
-  // Tipos de eliminación
   const eliminationTypes = [
     { value: "simple", label: "Eliminación Simple" },
     { value: "double", label: "Doble Eliminación" },
@@ -132,23 +95,8 @@ const EditTournament = () => {
     { value: "swiss", label: "Sistema Suizo" }
   ];
 
-  // Opciones de límite de jugadores
   const playerLimits = ["4", "8", "16", "32", "64", "128", "256"];
-
-  // Convertir torneos del usuario al formato del formulario
-  const tournamentOptions = userTournaments.map(t => ({
-    id: t.id,
-    name: t.name,
-    game: t.game,
-    gameType: t.type === "Eliminación Simple" ? "FPS" : t.type === "Doble Eliminación" ? "MOBA" : "Estrategia",
-    eliminationType: t.type === "Eliminación Simple" ? "simple" : t.type === "Doble Eliminación" ? "double" : "league",
-    maxPlayers: t.players.toString(),
-    startDate: t.startDate,
-    endDate: t.endDate,
-    description: t.description,
-    rules: t.rules,
-    prize: t.prize
-  }));
+  const statusOptions = ["abierto", "en curso", "finalizado"];
 
   // Cargar datos del torneo seleccionado
   const handleTournamentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -156,20 +104,22 @@ const EditTournament = () => {
     setSelectedTournamentId(id);
     
     if (id) {
-      const selectedTournament = tournamentOptions.find(t => t.id.toString() === id);
+      const selectedTournament = userTournaments.find(t => t.id.toString() === id);
       if (selectedTournament) {
         setFormData({
           id: selectedTournament.id,
           title: selectedTournament.name,
-          game: selectedTournament.game,
-          gameType: selectedTournament.gameType,
-          eliminationType: selectedTournament.eliminationType,
-          maxPlayers: selectedTournament.maxPlayers,
-          startDate: selectedTournament.startDate,
-          endDate: selectedTournament.endDate,
-          description: selectedTournament.description,
-          rules: selectedTournament.rules,
-          prize: selectedTournament.prize
+          gameId: selectedTournament.gameId?.toString() || "",
+          gameType: selectedTournament.gameType || "MOBA",
+          eliminationType: selectedTournament.type === "Eliminación Simple" ? "simple" : 
+                          selectedTournament.type === "Doble Eliminación" ? "double" : "league",
+          maxPlayers: selectedTournament.players?.toString() || "16",
+          startDate: selectedTournament.startDate ? selectedTournament.startDate.split('T')[0] : "",
+          endDate: selectedTournament.endDate ? selectedTournament.endDate.split('T')[0] : "",
+          description: selectedTournament.description || "",
+          rules: selectedTournament.rules || "",
+          prize: selectedTournament.prize || "",
+          status: selectedTournament.status || "abierto"
         });
       }
     }
@@ -203,13 +153,8 @@ const EditTournament = () => {
       isValid = false;
     }
 
-    if (!formData.game) {
-      newErrors.game = "Selecciona un juego";
-      isValid = false;
-    }
-
-    if (!formData.gameType) {
-      newErrors.gameType = "Selecciona el tipo de juego";
+    if (!formData.gameId) {
+      newErrors.gameId = "Selecciona un juego";
       isValid = false;
     }
 
@@ -228,28 +173,57 @@ const EditTournament = () => {
       isValid = false;
     }
 
-    const maxPlayersNum = parseInt(formData.maxPlayers, 10);
-    if (maxPlayersNum < 2) {
-      newErrors.maxPlayers = "El mínimo de jugadores es 2";
-      isValid = false;
-    }
-
     setErrors(newErrors);
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      const tournamentToSend = {
-        ...formData,
-        maxPlayers: parseInt(formData.maxPlayers, 10)
-      };
-      console.log("Torneo actualizado:", tournamentToSend);
+    
+    if (!isLoggedIn || !user?.id) {
+      alert("Debes iniciar sesión para editar un torneo");
+      return;
+    }
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/torneos/${formData.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: formData.title,
+          juego_id: parseInt(formData.gameId),
+          fecha_inicio: formData.startDate,
+          fecha_fin: formData.endDate,
+          max_participantes: parseInt(formData.maxPlayers),
+          descripcion: formData.description,
+          estado: formData.status,
+          formato: eliminationTypes.find(t => t.value === formData.eliminationType)?.label || formData.eliminationType,
+          premio: formData.prize,
+          reglas: formData.rules,
+          creado_por: user.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Error al actualizar el torneo");
+        setLoading(false);
+        return;
+      }
+
       setShowSuccess(true);
       setTimeout(() => {
         navigate("/torneos");
       }, 2000);
+    } catch (err) {
+      alert("Error al conectar con el servidor");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -285,7 +259,7 @@ const EditTournament = () => {
                   disabled={!hasTournaments}
                 >
                   <option value="">-- Selecciona un torneo --</option>
-                  {tournamentOptions.map(tournament => (
+                  {userTournaments.map(tournament => (
                     <option key={tournament.id} value={tournament.id}>
                       {tournament.name} - {tournament.game}
                     </option>
@@ -294,7 +268,6 @@ const EditTournament = () => {
               </div>
             </div>
 
-            {/* Mensaje si no hay torneos */}
             {!hasTournaments && (
               <div className="no-tournaments-message">
                 <span className="no-tournaments-icon">🏆</span>
@@ -306,7 +279,6 @@ const EditTournament = () => {
               </div>
             )}
 
-            {/* Mostrar formulario solo si hay torneos y se seleccionó uno */}
             {hasTournaments && selectedTournamentId && (
               <>
                 <div className="form-row">
@@ -327,20 +299,20 @@ const EditTournament = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="game">Juego *</label>
+                    <label htmlFor="gameId">Juego *</label>
                     <select
-                      id="game"
-                      name="game"
-                      value={formData.game}
+                      id="gameId"
+                      name="gameId"
+                      value={formData.gameId}
                       onChange={handleChange}
-                      className={errors.game ? "error" : ""}
+                      className={errors.gameId ? "error" : ""}
                     >
                       <option value="">Selecciona un juego</option>
-                      {gamesList.map(game => (
-                        <option key={game} value={game}>{game}</option>
+                      {games.map(game => (
+                        <option key={game.id} value={game.id}>{game.nombre_juego}</option>
                       ))}
                     </select>
-                    {errors.game && <span className="error-message">{errors.game}</span>}
+                    {errors.gameId && <span className="error-message">{errors.gameId}</span>}
                   </div>
 
                   <div className="form-group">
@@ -422,6 +394,24 @@ const EditTournament = () => {
                 </div>
 
                 <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="status">Estado del Torneo</label>
+                    <select
+                      id="status"
+                      name="status"
+                      value={formData.status}
+                      onChange={handleChange}
+                    >
+                      {statusOptions.map(status => (
+                        <option key={status} value={status}>
+                          {status === 'abierto' ? 'Abierto' : status === 'en curso' ? 'En curso' : 'Finalizado'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
                   <div className="form-group full-width">
                     <label htmlFor="description">Descripción del Torneo</label>
                     <textarea
@@ -465,7 +455,9 @@ const EditTournament = () => {
 
                 <div className="form-actions">
                   <Link to="/torneos" className="cancel-btn">Cancelar</Link>
-                  <button type="submit" className="submit-btn">Guardar Cambios</button>
+                  <button type="submit" className="submit-btn" disabled={loading}>
+                    {loading ? "GUARDANDO..." : "Guardar Cambios"}
+                  </button>
                 </div>
               </>
             )}
