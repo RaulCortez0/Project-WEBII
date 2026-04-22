@@ -1,34 +1,27 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { tournamentsData } from "./AllTournaments";
 import "./TournamentManager.css";
 
 const TournamentManager = () => {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth(); // sesión real desde el contexto
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showLoginWarning, setShowLoginWarning] = useState(false);
 
-  // Estado simulado de sesión (cambiar a true si el usuario está logueado)
-  const [isLoggedIn] = useState(true);
-
-  // Función para obtener el estado del torneo igual que en AllTournaments
   const getTournamentStatus = (tournament: typeof tournamentsData[0]) => {
     const currentDate = new Date();
     const endDate = new Date(tournament.endDate);
     const isDateExpired = currentDate > endDate;
     const isFull = tournament.registeredPlayers >= tournament.players;
 
-    if (isDateExpired) {
-      return "Torneo finalizado";
-    } else if (isFull || tournament.status === "full") {
-      return "Torneo cerrado - Cupo lleno";
-    } else {
-      const availableSpots = tournament.players - tournament.registeredPlayers;
-      return `Disponible - ${availableSpots} cupos`;
-    }
+    if (isDateExpired) return "Torneo finalizado";
+    if (isFull || tournament.status === "full") return "Torneo cerrado - Cupo lleno";
+    const availableSpots = tournament.players - tournament.registeredPlayers;
+    return `Disponible - ${availableSpots} cupos`;
   };
 
-  // Obtener los 3 torneos más recientes por fecha de inicio
   const getRecentTournaments = () => {
     return [...tournamentsData]
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
@@ -39,9 +32,7 @@ const TournamentManager = () => {
         game: tournament.game,
         players: tournament.players,
         startDate: new Date(tournament.startDate).toLocaleDateString("es-ES", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric"
+          day: "2-digit", month: "2-digit", year: "numeric"
         }),
         status: getTournamentStatus(tournament),
         participants: tournament.registeredPlayers,
@@ -56,8 +47,6 @@ const TournamentManager = () => {
       setShowLoginWarning(true);
       setSelectedOption("create");
     } else {
-      setShowLoginWarning(false);
-      setSelectedOption("create");
       navigate("/crear-torneo");
     }
   };
@@ -67,8 +56,6 @@ const TournamentManager = () => {
       setShowLoginWarning(true);
       setSelectedOption("edit");
     } else {
-      setShowLoginWarning(false);
-      setSelectedOption("edit");
       navigate("/editar-torneo");
     }
   };
@@ -78,7 +65,6 @@ const TournamentManager = () => {
     setSelectedOption(null);
   };
 
-  // Función para obtener la clase del estado
   const getStatusClass = (status: string) => {
     if (status.includes("Disponible")) return "status-available";
     if (status.includes("cerrado") || status.includes("Cupo lleno")) return "status-full";
@@ -88,7 +74,6 @@ const TournamentManager = () => {
 
   return (
     <main className="tournament-manager">
-      {/* Hero Section con imagen de fondo */}
       <section className="manager-hero">
         <div className="manager-hero-overlay"></div>
         <div className="manager-hero-content">
@@ -97,19 +82,18 @@ const TournamentManager = () => {
         </div>
       </section>
 
-      {/* Selector de acciones */}
       <section className="action-selector">
         <h2>¿Qué deseas hacer?</h2>
         <div className="action-buttons">
-          <button 
-            className={`action-btn create-btn ${selectedOption === "create" && showLoginWarning ? 'warning' : ''}`}
+          <button
+            className={`action-btn create-btn ${selectedOption === "create" && showLoginWarning ? "warning" : ""}`}
             onClick={handleCreateTournament}
           >
             <span className="btn-icon">🏆</span>
             Crear Torneo
           </button>
-          <button 
-            className={`action-btn edit-btn ${selectedOption === "edit" && showLoginWarning ? 'warning' : ''}`}
+          <button
+            className={`action-btn edit-btn ${selectedOption === "edit" && showLoginWarning ? "warning" : ""}`}
             onClick={handleEditTournament}
           >
             <span className="btn-icon">✏️</span>
@@ -117,14 +101,13 @@ const TournamentManager = () => {
           </button>
         </div>
 
-        {/* Advertencia de inicio de sesión */}
         {showLoginWarning && (
           <div className="login-warning">
             <div className="warning-icon">⚠️</div>
             <div className="warning-content">
               <h3>Necesitas una cuenta</h3>
               <p>
-                Para {selectedOption === "create" ? "crear un nuevo torneo " : "editar un torneo existente "} 
+                Para {selectedOption === "create" ? "crear un nuevo torneo" : "editar un torneo existente"}{" "}
                 es necesario tener una cuenta activa en Bracket Core.
               </p>
               <div className="warning-buttons">
@@ -137,13 +120,12 @@ const TournamentManager = () => {
         )}
       </section>
 
-      {/* Torneos Activos - 3 más recientes */}
       <section className="active-tournaments">
         <div className="section-header">
           <h2>🏆 Torneos Recientes</h2>
           <Link to="/torneos" className="view-all-link">Ver todos →</Link>
         </div>
-        
+
         <div className="tournaments-grid">
           {activeTournaments.map((tournament) => (
             <div className={`tournament-card-active ${getStatusClass(tournament.status)}`} key={tournament.id}>
@@ -170,8 +152,8 @@ const TournamentManager = () => {
                 </div>
               </div>
               <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
+                <div
+                  className="progress-fill"
                   style={{ width: `${(tournament.participants / tournament.totalPlayers) * 100}%` }}
                 ></div>
               </div>
@@ -183,7 +165,6 @@ const TournamentManager = () => {
         </div>
       </section>
 
-      {/* Sección de información adicional */}
       <section className="info-section">
         <div className="info-card">
           <div className="info-icon">📊</div>
@@ -229,11 +210,10 @@ const TournamentManager = () => {
         </div>
       </section>
 
-      {/* CTA Final */}
       <section className="manager-cta">
         <h2>¿Listo para organizar tu torneo?</h2>
         <p>
-          Únete a nuestra comunidad de organizadores y comienza a crear experiencias 
+          Únete a nuestra comunidad de organizadores y comienza a crear experiencias
           competitivas increíbles para jugadores de todo el mundo.
         </p>
         <div className="cta-buttons">

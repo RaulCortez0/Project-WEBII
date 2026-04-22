@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./Login.css";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -74,8 +76,8 @@ const Login = () => {
         return;
       }
 
-      // Guardar el usuario en sessionStorage para usarlo en la app
-      sessionStorage.setItem("user", JSON.stringify(data.user));
+      // Guardar sesión en el contexto global (y sessionStorage internamente)
+      login(data.user);
 
       // Redirigir al home
       navigate("/");
@@ -119,7 +121,6 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="login-form">
             <h2>Iniciar sesión</h2>
 
-            {/* Error general del API */}
             {apiError && (
               <div className="api-error-message">
                 {apiError}

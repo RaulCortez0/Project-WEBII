@@ -19,6 +19,14 @@
   background-clip: text;
   letter-spacing: 1px;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.logo-image {
+  height: 70px;
+  width: auto;
+  display: block;
 }
 
 .nav-links {
@@ -48,14 +56,24 @@
   justify-content: flex-end;
 }
 
-.language-select {
-  background: transparent;
-  color: #b0b0c0;
-  border: 1px solid #2a2a4a;
-  padding: 5px 10px;
-  border-radius: 5px;
-  cursor: pointer;
+/* Usuario logueado */
+.nav-username {
+  color: #00ccff;
   font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.login-link {
+  color: #b0b0c0;
+  text-decoration: none;
+  font-size: 14px;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.login-link:hover {
+  color: #00ccff;
 }
 
 .nav-btn {
@@ -69,6 +87,8 @@
   font-size: 14px;
   transition: 0.2s;
   white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .nav-btn:hover {
@@ -76,12 +96,40 @@
   box-shadow: 0 5px 15px rgba(0, 204, 255, 0.3);
 }
 
-/* Responsive Navbar */
+/* Botón de cerrar sesión — mismo tamaño que nav-btn pero estilo rojo/outline */
+.logout-btn {
+  background: transparent;
+  border: 2px solid #ff6b6b;
+  padding: 6px 18px;
+  border-radius: 25px;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 107, 107, 0.15);
+  transform: translateY(-2px);
+}
+
+.language-select {
+  background: transparent;
+  color: #b0b0c0;
+  border: 1px solid #2a2a4a;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Responsive */
 @media (max-width: 1200px) {
   .nav-links {
     gap: 15px;
   }
-  
   .nav-links a {
     font-size: 13px;
   }
@@ -94,25 +142,11 @@
     flex-direction: column;
     gap: 15px;
   }
-  
   .nav-links {
     justify-content: center;
     flex-wrap: wrap;
   }
-  
   .nav-right {
     justify-content: center;
   }
-}
-
-.logo-image {
-  height: 70px;
-  width: auto;
-  display: block;
-}
-
-/* Ajuste para mantener la altura del navbar */
-.nav-logo {
-  display: flex;
-  align-items: center;
 }

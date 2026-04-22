@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Register from "./pages/Register";
@@ -9,24 +10,68 @@ import AllTournaments from "./pages/AllTournaments";
 import CreateTournament from "./pages/CreateTournament";
 import EditTournament from "./pages/EditTournament";
 import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
+import GuestRoute from "./components/GuestRoute";
 import "./App.css";
 
 function App() {
   return (
-    <Router>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/registro" element={<Register />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/gestion-torneos" element={<TournamentManager />} />
-        <Route path="/torneos" element={<AllTournaments />} />
-        <Route path="/crear-torneo" element={<CreateTournament />} />
-        <Route path="/editar-torneo" element={<EditTournament />} />
-      </Routes>
-      <Footer />
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Navbar />
+        <Routes>
+          {/* Rutas públicas */}
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/torneos" element={<AllTournaments />} />
+
+          {/* Solo para usuarios NO autenticados */}
+          <Route
+            path="/registro"
+            element={
+              <GuestRoute>
+                <Register />
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <GuestRoute>
+                <Login />
+              </GuestRoute>
+            }
+          />
+
+          {/* Rutas protegidas — requieren sesión */}
+          <Route
+            path="/gestion-torneos"
+            element={
+              <ProtectedRoute>
+                <TournamentManager />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crear-torneo"
+            element={
+              <ProtectedRoute>
+                <CreateTournament />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/editar-torneo"
+            element={
+              <ProtectedRoute>
+                <EditTournament />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+        <Footer />
+      </Router>
+    </AuthProvider>
   );
 }
 

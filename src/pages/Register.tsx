@@ -148,7 +148,6 @@ const Register = () => {
           <form onSubmit={handleSubmit} className="register-form">
             <h2>Crear cuenta</h2>
 
-            {/* Error general del API */}
             {apiError && (
               <div className="api-error-message">
                 {apiError}
