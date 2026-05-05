@@ -30,7 +30,9 @@ const Navbar = () => {
       <div className="nav-right">
         {isLoggedIn ? (
           <>
-            <span className="nav-username">👤 {user?.username}</span>
+            <Link to="/profile" className="nav-username">
+              👤 {user?.username}
+            </Link>
             <button className="nav-btn logout-btn" onClick={handleLogout}>
               Cerrar sesión
             </button>
