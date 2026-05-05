@@ -10,6 +10,7 @@ import AllTournaments from "./pages/AllTournaments";
 import CreateTournament from "./pages/CreateTournament";
 import EditTournament from "./pages/EditTournament";
 import TournamentDetail from "./pages/TournamentDetail";
+import Profile from "./pages/Profile";  // ← IMPORTAR Profile
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import GuestRoute from "./components/GuestRoute";
@@ -25,7 +26,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/torneos" element={<AllTournaments />} />
-          <Route path="/torneo/:id" element={<TournamentDetail />} /> {/* NUEVO */}
+          <Route path="/torneo/:id" element={<TournamentDetail />} />
 
           {/* Solo para usuarios NO autenticados */}
           <Route
@@ -67,6 +68,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <EditTournament />
+              </ProtectedRoute>
+            }
+          />
+          {/* ← AGREGAR RUTA DEL PERFIL (protegida) */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />
