@@ -11,6 +11,7 @@ import CreateTournament from "./pages/CreateTournament";
 import EditTournament from "./pages/EditTournament";
 import TournamentDetail from "./pages/TournamentDetail";
 import Profile from "./pages/Profile";  // ← IMPORTAR Profile
+import OAuthCallback from "./pages/OAuthCallback";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import GuestRoute from "./components/GuestRoute";
@@ -27,6 +28,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/torneos" element={<AllTournaments />} />
           <Route path="/torneo/:id" element={<TournamentDetail />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
 
           {/* Solo para usuarios NO autenticados */}
           <Route

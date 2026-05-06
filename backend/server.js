@@ -2,11 +2,39 @@ import express from "express";
 import mysql from "mysql2";
 import cors from "cors";
 import bcrypt from "bcrypt";
+import session from "express-session";
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { Strategy as GitHubStrategy } from "passport-github2";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, ".env") });
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json());
+
+// ============ SESIÓN ============
+app.use(session({
+  secret: process.env.SESSION_SECRET || "bracketcore_secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
 
 const db = mysql.createConnection({
   host: "localhost",
@@ -22,6 +50,101 @@ db.connect((err) => {
     console.log("Conectado a MySQL");
   }
 });
+
+// ============ OAUTH — Helper para buscar o crear usuario ============
+const findOrCreateOAuthUser = (email, username, avatar_url, provider, callback) => {
+  db.query("SELECT * FROM Usuarios WHERE email = ?", [email], (err, results) => {
+    if (err) return callback(err, null);
+
+    if (results.length > 0) {
+      // Usuario ya existe — retornarlo
+      const { password: _, ...user } = results[0];
+      return callback(null, user);
+    }
+
+    // Usuario nuevo — crearlo sin contraseña (OAuth)
+    const safeUsername = username.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 30);
+    db.query(
+      "INSERT INTO Usuarios (username, email, password, avatar_url, oauth_provider) VALUES (?, ?, NULL, ?, ?)",
+      [safeUsername, email, avatar_url || null, provider],
+      (err, result) => {
+        if (err) {
+          // Si el username ya existe, agregar sufijo numérico
+          const uniqueUsername = safeUsername + "_" + Date.now().toString().slice(-4);
+          db.query(
+            "INSERT INTO Usuarios (username, email, password, avatar_url, oauth_provider) VALUES (?, ?, NULL, ?, ?)",
+            [uniqueUsername, email, avatar_url || null, provider],
+            (err2, result2) => {
+              if (err2) return callback(err2, null);
+              db.query("SELECT * FROM Usuarios WHERE id = ?", [result2.insertId], (err3, rows) => {
+                if (err3) return callback(err3, null);
+                const { password: _, ...user } = rows[0];
+                callback(null, user);
+              });
+            }
+          );
+          return;
+        }
+        db.query("SELECT * FROM Usuarios WHERE id = ?", [result.insertId], (err2, rows) => {
+          if (err2) return callback(err2, null);
+          const { password: _, ...user } = rows[0];
+          callback(null, user);
+        });
+      }
+    );
+  });
+};
+
+// ============ GOOGLE STRATEGY ============
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "http://localhost:3001/auth/google/callback"
+}, (accessToken, refreshToken, profile, done) => {
+  const email = profile.emails?.[0]?.value || "";
+  const username = profile.displayName || profile.id;
+  const avatar_url = profile.photos?.[0]?.value || "";
+  findOrCreateOAuthUser(email, username, avatar_url, "google", done);
+}));
+
+// ============ GITHUB STRATEGY ============
+passport.use(new GitHubStrategy({
+  clientID: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: "http://localhost:3001/auth/github/callback",
+  scope: ["user:email"]
+}, (accessToken, refreshToken, profile, done) => {
+  const email = profile.emails?.[0]?.value || `${profile.id}@github.com`;
+  const username = profile.username || profile.displayName || profile.id;
+  const avatar_url = profile.photos?.[0]?.value || "";
+  findOrCreateOAuthUser(email, username, avatar_url, "github", done);
+}));
+
+// ============ RUTAS OAUTH ============
+
+// Iniciar OAuth con Google
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+// Callback Google
+app.get("/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_failed` }),
+  (req, res) => {
+    const userData = encodeURIComponent(JSON.stringify(req.user));
+    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?user=${userData}`);
+  }
+);
+
+// Iniciar OAuth con GitHub
+app.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
+
+// Callback GitHub
+app.get("/auth/github/callback",
+  passport.authenticate("github", { failureRedirect: `${process.env.FRONTEND_URL}/login?error=github_failed` }),
+  (req, res) => {
+    const userData = encodeURIComponent(JSON.stringify(req.user));
+    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?user=${userData}`);
+  }
+);
 
 // ============ USUARIOS (existente) ============
 
