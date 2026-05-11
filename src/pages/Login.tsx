@@ -1,20 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./Login.css";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login, isLoggedIn } = useAuth();
 
-  const [formData, setFormData] = useState({
-    email: "",
-    password: ""
-  });
+  // Si ya está logueado, redirigir al home
+  useEffect(() => {
+    if (isLoggedIn) navigate("/");
+  }, [isLoggedIn, navigate]);
 
-  const [errors, setErrors] = useState({
-    email: "",
-    password: ""
-  });
-
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({ email: "", password: "" });
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +50,6 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     setLoading(true);
@@ -61,10 +59,7 @@ const Login = () => {
       const response = await fetch("http://localhost:3001/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+        body: JSON.stringify({ email: formData.email, password: formData.password })
       });
 
       const data = await response.json();
@@ -74,12 +69,10 @@ const Login = () => {
         return;
       }
 
-      // Guardar el usuario en sessionStorage para usarlo en la app
-      sessionStorage.setItem("user", JSON.stringify(data.user));
-
-      // Redirigir al home
+      // Guardar en el contexto global de autenticación
+      login(data.user);
       navigate("/");
-    } catch (err) {
+    } catch {
       setApiError("No se pudo conectar al servidor. Intenta de nuevo.");
     } finally {
       setLoading(false);
@@ -119,11 +112,8 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="login-form">
             <h2>Iniciar sesión</h2>
 
-            {/* Error general del API */}
             {apiError && (
-              <div className="api-error-message">
-                {apiError}
-              </div>
+              <div className="api-error-message">{apiError}</div>
             )}
 
             <div className="form-group">
@@ -162,11 +152,7 @@ const Login = () => {
               <a href="#" className="forgot-password">¿Olvidaste tu contraseña?</a>
             </div>
 
-            <button
-              type="submit"
-              className="login-submit-btn"
-              disabled={loading}
-            >
+            <button type="submit" className="login-submit-btn" disabled={loading}>
               {loading ? "ENTRANDO..." : "INICIAR SESIÓN"}
             </button>
 
@@ -179,8 +165,20 @@ const Login = () => {
             </div>
 
             <div className="social-login">
-              <button type="button" className="social-btn google">Google</button>
-              <button type="button" className="social-btn github">GitHub</button>
+              <button
+                type="button"
+                className="social-btn google"
+                onClick={() => window.location.href = "http://localhost:3001/auth/google"}
+              >
+                Google
+              </button>
+              <button
+                type="button"
+                className="social-btn github"
+                onClick={() => window.location.href = "http://localhost:3001/auth/github"}
+              >
+                GitHub
+              </button>
             </div>
           </form>
         </div>

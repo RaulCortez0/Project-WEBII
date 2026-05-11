@@ -1,15 +1,6 @@
-<<<<<<< HEAD
-function Home() {
-  return (
-    <div>
-      <h1>Página de Inicio</h1>
-      <p>Bienvenido a mi aplicacion</p>
-    </div>
-  )
-}
-=======
 import { Link } from "react-router-dom";
 import "./Home.css";
+
 const Home = () => {
   const tournaments = [
     {
@@ -27,7 +18,6 @@ const Home = () => {
       date: "Created 3/10/26"
     }
   ];
->>>>>>> BD
 
   return (
     <main className="home">

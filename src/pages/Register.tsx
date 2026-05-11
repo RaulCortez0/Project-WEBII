@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "./Register.css";
 
 const Register = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     username: "",
@@ -98,9 +100,18 @@ const Register = () => {
         return;
       }
 
-      // Registro exitoso — redirigir al login
-      alert("¡Cuenta creada exitosamente! Por favor inicia sesión.");
-      navigate("/login");
+      // Registro exitoso — auto-login y redirigir al home
+      const loginRes = await fetch("http://localhost:3001/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email, password: formData.password })
+      });
+      const loginData = await loginRes.json();
+
+      if (loginRes.ok) {
+        login(loginData.user);
+      }
+      navigate("/");
     } catch (err) {
       setApiError("No se pudo conectar al servidor. Intenta de nuevo.");
     } finally {
@@ -236,8 +247,20 @@ const Register = () => {
             </div>
 
             <div className="social-register">
-              <button type="button" className="social-btn google">Google</button>
-              <button type="button" className="social-btn github">GitHub</button>
+              <button
+                type="button"
+                className="social-btn google"
+                onClick={() => window.location.href = "http://localhost:3001/auth/google"}
+              >
+                Google
+              </button>
+              <button
+                type="button"
+                className="social-btn github"
+                onClick={() => window.location.href = "http://localhost:3001/auth/github"}
+              >
+                GitHub
+              </button>
             </div>
           </form>
         </div>

@@ -116,3 +116,45 @@
   display: flex;
   align-items: center;
 }
+
+.nav-username {
+  color: #00ccff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.nav-username:hover {
+  color: #7b2cbf;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid #7b2cbf;
+  padding: 8px 20px;
+  border-radius: 25px;
+  color: #b0b0c0;
+  cursor: pointer;
+  font-size: 14px;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+
+.logout-btn:hover {
+  background: #7b2cbf22;
+  color: white;
+  border-color: #00ccff;
+}
+
+.login-link {
+  color: #b0b0c0;
+  text-decoration: none;
+  font-size: 14px;
+  transition: 0.2s;
+}
+
+.login-link:hover {
+  color: #00ccff;
+}
