@@ -12,6 +12,8 @@ import EditTournament from "./pages/EditTournament";
 import TournamentDetail from "./pages/TournamentDetail";
 import Profile from "./pages/Profile";
 import OAuthCallback from "./pages/OAuthCallback";
+import AdminDashboard from "./pages/AdminDashboard";
+import TournamentBracket from "./pages/TournamentBracket";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import GuestRoute from "./components/GuestRoute";
@@ -28,6 +30,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/torneos" element={<AllTournaments />} />
           <Route path="/torneo/:id" element={<TournamentDetail />} />
+          <Route path="/torneo/:id/bracket" element={<TournamentBracket />} />
           <Route path="/oauth-callback" element={<OAuthCallback />} />
 
           {/* Solo para usuarios NO autenticados */}
@@ -40,6 +43,7 @@ function App() {
           <Route path="/editar-torneo" element={<ProtectedRoute><EditTournament /></ProtectedRoute>} />
           <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         </Routes>
         <Footer />
       </Router>

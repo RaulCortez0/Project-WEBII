@@ -24,6 +24,9 @@ const Navbar = () => {
         {isLoggedIn && (
           <Link to="/gestion-torneos">Gestión</Link>
         )}
+        {isLoggedIn && user?.role === "admin" && (
+          <Link to="/admin" style={{ color: "#a855f7", fontWeight: 700 }}>⚙️ Admin</Link>
+        )}
         <a href="#">API</a>
       </div>
 

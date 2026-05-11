@@ -192,22 +192,50 @@ const TournamentDetail = () => {
             </span>
           </div>
 
-          <div className="tournament-item-footer" style={{ justifyContent: "space-between" }}>
+          <div className="tournament-item-footer" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
             <Link to="/torneos" className="view-btn">
               ← Volver a torneos
             </Link>
-            {statusInfo.available ? (
-              <button 
-                className="register-btn"
-                onClick={handleRegister}
+
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {/* Botón bracket — siempre visible */}
+              <Link
+                to={`/torneo/${id}/bracket`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 22px",
+                  background: "linear-gradient(135deg, #6366f1, #a855f7)",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  textDecoration: "none",
+                  transition: "opacity 0.2s",
+                }}
               >
-                Inscribirse al Torneo
-              </button>
-            ) : (
-              <button className="register-btn disabled" disabled>
-                {statusInfo.message}
-              </button>
-            )}
+                🏆 Ver Bracket
+              </Link>
+
+              {/* Botón inscribirse — bloqueado si bracket iniciado */}
+              {tournament.bracketIniciado ? (
+                <button className="register-btn disabled" disabled title="El bracket ya fue generado">
+                  🔒 Inscripciones cerradas
+                </button>
+              ) : statusInfo.available ? (
+                <button
+                  className="register-btn"
+                  onClick={handleRegister}
+                >
+                  Inscribirse al Torneo
+                </button>
+              ) : (
+                <button className="register-btn disabled" disabled>
+                  {statusInfo.message}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>

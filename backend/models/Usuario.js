@@ -10,12 +10,12 @@ const Usuario = sequelize.define(
       autoIncrement: true,
     },
     username: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.STRING(50),
       allowNull: false,
       unique: true,
     },
     email: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.STRING(100),
       allowNull: false,
       unique: true,
       validate: {
@@ -25,6 +25,14 @@ const Usuario = sequelize.define(
     password: {
       type: DataTypes.STRING(255),
       allowNull: true, // NULL para usuarios OAuth
+    },
+    role: {
+      type: DataTypes.ENUM("admin", "organizador", "jugador"),
+      defaultValue: "jugador",
+    },
+    fecha_registro: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
     avatar_url: {
       type: DataTypes.STRING(500),
@@ -36,8 +44,8 @@ const Usuario = sequelize.define(
     },
   },
   {
-    tableName: "Usuarios",   // Nombre exacto de tu tabla en MySQL
-    timestamps: false,       // Tu tabla no tiene createdAt/updatedAt
+    tableName: "usuarios",  // Nombre exacto en la BD (minúsculas)
+    timestamps: false,      // La tabla no tiene createdAt/updatedAt de Sequelize
   }
 );
 
