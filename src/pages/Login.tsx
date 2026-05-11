@@ -17,6 +17,14 @@ const Login = () => {
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const handleGoogleLogin = () => {
+    window.location.href = "http://localhost:3001/auth/google";
+  };
+
+  const handleGithubLogin = () => {
+    window.location.href = "http://localhost:3001/auth/github";
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -69,7 +77,7 @@ const Login = () => {
         return;
       }
 
-      // Guardar en el contexto global de autenticación
+      // Guardar sesión en el contexto global
       login(data.user);
       navigate("/");
     } catch {
@@ -165,20 +173,8 @@ const Login = () => {
             </div>
 
             <div className="social-login">
-              <button
-                type="button"
-                className="social-btn google"
-                onClick={() => window.location.href = "http://localhost:3001/auth/google"}
-              >
-                Google
-              </button>
-              <button
-                type="button"
-                className="social-btn github"
-                onClick={() => window.location.href = "http://localhost:3001/auth/github"}
-              >
-                GitHub
-              </button>
+              <button type="button" className="social-btn google" onClick={handleGoogleLogin}>Google</button>
+              <button type="button" className="social-btn github" onClick={handleGithubLogin}>GitHub</button>
             </div>
           </form>
         </div>

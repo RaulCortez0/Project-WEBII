@@ -19,7 +19,11 @@ const Navbar = () => {
 
       <div className="nav-links">
         <Link to="/">Inicio</Link>
-        <a href="#">Acerca de</a>
+        <Link to="/about">Acerca de</Link>
+        <Link to="/torneos">Torneos</Link>
+        {isLoggedIn && (
+          <Link to="/gestion-torneos">Gestión</Link>
+        )}
         <a href="#">API</a>
       </div>
 

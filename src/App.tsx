@@ -4,9 +4,17 @@ import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+import About from "./pages/About";
+import TournamentManager from "./pages/TournamentManager";
+import AllTournaments from "./pages/AllTournaments";
+import CreateTournament from "./pages/CreateTournament";
+import EditTournament from "./pages/EditTournament";
+import TournamentDetail from "./pages/TournamentDetail";
 import Profile from "./pages/Profile";
 import OAuthCallback from "./pages/OAuthCallback";
 import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
+import GuestRoute from "./components/GuestRoute";
 import "./App.css";
 
 function App() {
@@ -15,11 +23,23 @@ function App() {
       <Router>
         <Navbar />
         <Routes>
+          {/* Rutas públicas */}
           <Route path="/" element={<Home />} />
-          <Route path="/registro" element={<Register />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/perfil" element={<Profile />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/torneos" element={<AllTournaments />} />
+          <Route path="/torneo/:id" element={<TournamentDetail />} />
           <Route path="/oauth-callback" element={<OAuthCallback />} />
+
+          {/* Solo para usuarios NO autenticados */}
+          <Route path="/registro" element={<GuestRoute><Register /></GuestRoute>} />
+          <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+
+          {/* Rutas protegidas — requieren sesión */}
+          <Route path="/gestion-torneos" element={<ProtectedRoute><TournamentManager /></ProtectedRoute>} />
+          <Route path="/crear-torneo" element={<ProtectedRoute><CreateTournament /></ProtectedRoute>} />
+          <Route path="/editar-torneo" element={<ProtectedRoute><EditTournament /></ProtectedRoute>} />
+          <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         </Routes>
         <Footer />
       </Router>

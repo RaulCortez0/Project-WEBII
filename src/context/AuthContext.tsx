@@ -6,6 +6,8 @@ interface User {
   email: string;
   avatar_url?: string;
   oauth_provider?: string;
+  role?: string;
+  fecha_registro?: string;
 }
 
 interface AuthContextType {
