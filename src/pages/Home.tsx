@@ -47,16 +47,18 @@ const Home = () => {
     const isDateExpired = currentDate > endDate;
     const isFull = tournament.registeredPlayers >= tournament.players;
 
-    if (isDateExpired) return "Torneo finalizado";
-    if (isFull || tournament.status === "full") return "Torneo cerrado - Cupo lleno";
+    if (tournament.status === "finalizado") return "Finalizado";
+    if (tournament.status === "en curso" || tournament.bracketIniciado) return "En Curso";
+    if (isDateExpired) return "Finalizado";
+    if (isFull || tournament.status === "full") return "Cupo lleno";
     const availableSpots = tournament.players - tournament.registeredPlayers;
-    return `Disponible - ${availableSpots} cupos`;
+    return `${availableSpots} cupos`;
   };
 
   const getStatusClass = (status: string) => {
-    if (status.includes("Disponible")) return "status-available";
-    if (status.includes("cerrado") || status.includes("Cupo lleno")) return "status-full";
-    if (status.includes("finalizado")) return "status-closed";
+    if (status === "Cupo lleno") return "status-full";
+    if (status === "Finalizado" || status === "En Curso") return "status-closed";
+    if (status.includes("cupos")) return "status-available";
     return "status-available";
   };
 
@@ -120,10 +122,12 @@ const Home = () => {
             <div className="home-tournaments-grid">
               {recentTournaments.map((tournament) => (
                 <div className={`home-tournament-card ${getStatusClass(tournament.status)}`} key={tournament.id}>
-                  <div className={`home-tournament-status ${getStatusClass(tournament.status)}`}>
-                    {tournament.status}
+                  <div className="home-card-header">
+                    <h4>{tournament.name}</h4>
+                    <div className={`home-tournament-status ${getStatusClass(tournament.status)}`}>
+                      {tournament.status}
+                    </div>
                   </div>
-                  <h4>{tournament.name}</h4>
                   <div className="home-tournament-details">
                     <div className="home-detail-item">
                       <span className="home-detail-label">🎮 Juego:</span>

@@ -13,12 +13,22 @@ const TournamentDetail = () => {
   const [tournament, setTournament] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isEnrolled, setIsEnrolled] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchTournament();
     }
   }, [id]);
+
+  // Check enrollment whenever user or tournament changes
+  useEffect(() => {
+    if (isLoggedIn && user?.id && id) {
+      checkEnrollment();
+    } else {
+      setIsEnrolled(false);
+    }
+  }, [isLoggedIn, user, id]);
 
   const fetchTournament = async () => {
     try {
@@ -30,6 +40,16 @@ const TournamentDetail = () => {
       setError("No se pudo cargar el torneo");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkEnrollment = async () => {
+    try {
+      const r = await fetch(`${API_URL}/inscripciones/check?usuario_id=${user!.id}&torneo_id=${id}`);
+      const data = await r.json();
+      setIsEnrolled(!!data.enrolled);
+    } catch {
+      setIsEnrolled(false);
     }
   };
 
@@ -56,7 +76,27 @@ const TournamentDetail = () => {
         toast.error(data.error || "Error al inscribirse");
         return;
       }
-      toast.success("\u00a1Inscripci\u00f3n exitosa!");
+      toast.success("¡Inscripción exitosa!");
+      setIsEnrolled(true);
+      fetchTournament();
+    } catch {
+      toast.error("Error al conectar con el servidor");
+    }
+  };
+
+  const handleUnregister = async () => {
+    if (!isLoggedIn || !user?.id) return;
+    try {
+      const response = await fetch(`${API_URL}/inscripciones/${id}/${user.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || "Error al cancelar inscripción");
+        return;
+      }
+      toast.success("Inscripción cancelada exitosamente");
+      setIsEnrolled(false);
       fetchTournament();
     } catch {
       toast.error("Error al conectar con el servidor");
@@ -121,6 +161,8 @@ const TournamentDetail = () => {
   }
 
   const statusInfo = getStatusInfo();
+  // User can cancel only if enrolled AND tournament is still open (no bracket yet)
+  const canUnregister = isEnrolled && statusInfo.available && !tournament.bracketIniciado;
 
   return (
     <main className="all-tournaments">
@@ -161,7 +203,22 @@ const TournamentDetail = () => {
       <section className="tournaments-results">
         <div className={`tournament-item ${statusInfo.className}`} style={{ maxWidth: "900px", margin: "0 auto" }}>
           <div className="tournament-item-header">
-            <h3>Detalles del Torneo</h3>
+            <h3>
+              Detalles del Torneo
+              {isEnrolled && (
+                <span style={{
+                  marginLeft: "12px",
+                  fontSize: "0.7rem",
+                  background: "linear-gradient(135deg, #10b981, #059669)",
+                  color: "#fff",
+                  padding: "4px 12px",
+                  borderRadius: "20px",
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                  verticalAlign: "middle"
+                }}>✓ Ya estás inscrito</span>
+              )}
+            </h3>
             <span className={`status-badge ${statusInfo.className}`}>
               {statusInfo.message}
             </span>
@@ -192,6 +249,12 @@ const TournamentDetail = () => {
               <div className="detail">
                 <span className="detail-icon">🎁</span>
                 <span>{tournament.prize}</span>
+              </div>
+            )}
+            {tournament.createdByUsername && (
+              <div className="detail">
+                <span className="detail-icon">👤</span>
+                <span>Organiza: <strong style={{ color: "#a78bfa" }}>{tournament.createdByUsername}</strong></span>
               </div>
             )}
           </div>
@@ -248,16 +311,41 @@ const TournamentDetail = () => {
                 🏆 Ver Bracket
               </Link>
 
-              {/* Botón inscribirse — bloqueado si bracket iniciado */}
+              {/* Botón de inscripción / cancelar */}
               {tournament.bracketIniciado ? (
-                <button className="register-btn disabled" disabled title="El bracket ya fue generado">
-                  🔒 Inscripciones cerradas
-                </button>
+                // Bracket started: show enrolled status or closed
+                isEnrolled ? (
+                  <button className="register-btn disabled" disabled
+                    style={{ background: "rgba(16,185,129,0.2)", borderColor: "#10b981", color: "#10b981", cursor: "default" }}
+                    title="El bracket ya fue generado"
+                  >
+                    ✅ Participante confirmado
+                  </button>
+                ) : (
+                  <button className="register-btn disabled" disabled title="El bracket ya fue generado">
+                    🔒 Inscripciones cerradas
+                  </button>
+                )
+              ) : isEnrolled ? (
+                // Open tournament, user is enrolled
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button className="register-btn disabled" disabled
+                    style={{ background: "rgba(16,185,129,0.2)", borderColor: "#10b981", color: "#10b981", cursor: "default" }}
+                  >
+                    ✅ Ya estás inscrito
+                  </button>
+                  {canUnregister && (
+                    <button
+                      className="register-btn"
+                      onClick={handleUnregister}
+                      style={{ background: "linear-gradient(135deg, #ef4444, #b91c1c)" }}
+                    >
+                      ❌ Cancelar inscripción
+                    </button>
+                  )}
+                </div>
               ) : statusInfo.available ? (
-                <button
-                  className="register-btn"
-                  onClick={handleRegister}
-                >
+                <button className="register-btn" onClick={handleRegister}>
                   Inscribirse al Torneo
                 </button>
               ) : (

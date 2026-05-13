@@ -37,6 +37,14 @@ const STATUS_COLOR: Record<string, string> = {
   eliminado: "#ef4444",
 };
 
+/** Calcula el estado REAL del torneo considerando la fecha de fin */
+const getEffectiveStatus = (t: Tournament): string => {
+  if (t.status === "eliminado" || t.status === "finalizado") return t.status;
+  if (t.status === "en curso" || t.bracketIniciado) return "en curso";
+  if (t.endDate && new Date() > new Date(t.endDate)) return "finalizado";
+  return t.status;
+};
+
 export default function EditTournament() {
   const navigate = useNavigate();
   const { user, isLoggedIn } = useAuth();
@@ -160,16 +168,29 @@ export default function EditTournament() {
 
   const canEdit = (t: Tournament) => {
     if (isAdmin) return true;
-    if (t.status === "eliminado" || t.status === "finalizado") return false;
-    if (t.bracketIniciado && t.status !== "finalizado") return false;
+    const eff = getEffectiveStatus(t);
+    // Regular users cannot edit eliminated, finalized, or expired-by-date tournaments
+    if (eff === "eliminado" || eff === "finalizado") return false;
+    // Cannot edit while bracket is active
+    if (t.bracketIniciado && eff !== "finalizado") return false;
     return true;
   };
 
   const canDelete = (t: Tournament) => {
     if (isAdmin) return true;
-    if (t.status === "eliminado") return false;
-    if (t.bracketIniciado && t.status !== "finalizado") return false;
+    const eff = getEffectiveStatus(t);
+    if (eff === "eliminado") return false;
+    if (t.bracketIniciado && eff !== "finalizado") return false;
     return true;
+  };
+
+  /** Reason text for disabled edit/delete button tooltip */
+  const getBlockReason = (t: Tournament): string => {
+    const eff = getEffectiveStatus(t);
+    if (eff === "eliminado") return "Torneo eliminado";
+    if (eff === "finalizado") return "El torneo ya finalizó — solo el admin puede modificarlo";
+    if (t.bracketIniciado) return "Bracket activo — solo el admin puede editar";
+    return "No editable";
   };
 
   const filtered = tournaments.filter(t =>
@@ -216,12 +237,20 @@ export default function EditTournament() {
           </div>
         ) : (
           <div className="et-cards">
-            {filtered.map(t => (
-              <div className={`et-card ${t.status === "eliminado" ? "et-card-eliminated" : ""}`} key={t.id}>
-                {/* Status badge */}
-                <div className="et-card-status" style={{ background: STATUS_COLOR[t.status] ?? "#64748b" }}>
-                  {STATUS_LABELS[t.status] ?? t.status}
-                  {t.bracketIniciado && t.status !== "finalizado" && t.status !== "eliminado" && (
+            {filtered.map(t => {
+              const eff = getEffectiveStatus(t);
+              const isDateExpiredOnly = eff === "finalizado" && t.status !== "finalizado" && !t.bracketIniciado;
+              return (
+              <div className={`et-card ${eff === "eliminado" ? "et-card-eliminated" : ""}`} key={t.id}>
+                {/* Status badge — uses REAL effective status */}
+                <div
+                  className="et-card-status"
+                  style={{ background: STATUS_COLOR[eff] ?? "#64748b" }}
+                  title={isDateExpiredOnly ? "Finalizado automáticamente por vencimiento de fecha" : undefined}
+                >
+                  {STATUS_LABELS[eff] ?? eff}
+                  {isDateExpiredOnly && <span style={{ marginLeft: 6 }}>📅</span>}
+                  {!!t.bracketIniciado && eff !== "finalizado" && eff !== "eliminado" && (
                     <span style={{ marginLeft: 6 }}>🔒</span>
                   )}
                 </div>
@@ -242,6 +271,24 @@ export default function EditTournament() {
                     </div>
                     <span>{Math.round(((t.registeredPlayers ?? 0) / t.players) * 100)}%</span>
                   </div>
+
+                  {/* Info banner for expired-by-date tournaments */}
+                  {isDateExpiredOnly && !isAdmin && (
+                    <div style={{
+                      marginTop: 12,
+                      padding: "8px 14px",
+                      background: "rgba(99,102,241,0.12)",
+                      border: "1px solid rgba(99,102,241,0.3)",
+                      borderRadius: 8,
+                      color: "#a5b4fc",
+                      fontSize: "0.8rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8
+                    }}>
+                      📅 <span>Este torneo finalizó por fecha. Solo el administrador puede modificarlo.</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action buttons */}
@@ -256,7 +303,7 @@ export default function EditTournament() {
                     className={`et-btn-edit ${!canEdit(t) ? "et-btn-disabled" : ""}`}
                     onClick={() => canEdit(t) && openEdit(t)}
                     disabled={!canEdit(t)}
-                    title={!canEdit(t) ? (t.bracketIniciado ? "Bracket activo: solo admin puede editar" : "No editable") : "Editar torneo"}
+                    title={!canEdit(t) ? getBlockReason(t) : "Editar torneo"}
                   >
                     ✏️ Editar
                   </button>
@@ -264,20 +311,21 @@ export default function EditTournament() {
                     className={`et-btn-delete ${!canDelete(t) ? "et-btn-disabled" : ""}`}
                     onClick={() => canDelete(t) && setDeleteConfirm(t)}
                     disabled={!canDelete(t)}
-                    title={!canDelete(t) ? (t.bracketIniciado ? "Bracket activo: solo admin puede eliminar" : "No eliminable") : "Eliminar torneo"}
+                    title={!canDelete(t) ? getBlockReason(t) : "Eliminar torneo"}
                   >
                     🗑️ Eliminar
                   </button>
                 </div>
 
-                {/* Admin indicator */}
-                {isAdmin && !canEdit(t) && t.status !== "eliminado" && (
+                {/* Admin bypass indicator */}
+                {isAdmin && eff !== "eliminado" && (
                   <div className="et-admin-bypass">
-                    <span>⚠️ Admin: puedes editar/eliminar aunque esté en curso</span>
+                    <span>🛡️ Admin: puedes editar/eliminar sin restricciones</span>
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -291,9 +339,22 @@ export default function EditTournament() {
               <button className="et-modal-close" onClick={() => setEditingTournament(null)}>✕</button>
             </div>
 
-            {!isAdmin && editingTournament.bracketIniciado && editingTournament.status !== "finalizado" && (
+            {!isAdmin && !!editingTournament.bracketIniciado && editingTournament.status !== "finalizado" && (
               <div className="et-warn-banner">
                 🔒 Este torneo tiene un bracket activo. Solo el administrador puede editarlo.
+              </div>
+            )}
+            {isAdmin && (
+              <div style={{
+                padding: "8px 14px",
+                background: "rgba(245,158,11,0.1)",
+                border: "1px solid rgba(245,158,11,0.3)",
+                borderRadius: 8,
+                color: "#fbbf24",
+                fontSize: "0.82rem",
+                marginBottom: 12
+              }}>
+                🛡️ Admin: estás editando este torneo con permisos elevados.
               </div>
             )}
 

@@ -19,6 +19,7 @@ export interface Tournament {
   prize?: string;
   rules?: string;
   createdBy?: number;
+  createdByUsername?: string;
 }
 
 const API_URL = "http://localhost:3001";
@@ -31,6 +32,8 @@ const AllTournaments = () => {
   const [sortOrder, setSortOrder] = useState<"recent" | "oldest">("recent");
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
+  // Map of tournamentId → enrolled boolean
+  const [enrolledMap, setEnrolledMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     fetchTournaments();
@@ -41,13 +44,32 @@ const AllTournaments = () => {
       const response = await fetch(`${API_URL}/torneos`);
       if (!response.ok) throw new Error("Error al cargar torneos");
       const data = await response.json();
-      // Filter out any eliminated ones (backend already does it, but safety)
-      setTournaments(data.filter((t: Tournament) => t.status !== "eliminado"));
+      const filtered = data.filter((t: Tournament) => t.status !== "eliminado");
+      setTournaments(filtered);
+      // After loading tournaments, check enrollment for logged-in user
+      if (isLoggedIn && user?.id) {
+        await checkEnrollments(filtered, user.id);
+      }
     } catch {
       toast.error("No se pudieron cargar los torneos");
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkEnrollments = async (list: Tournament[], userId: number) => {
+    const entries = await Promise.all(
+      list.map(async (t) => {
+        try {
+          const r = await fetch(`${API_URL}/inscripciones/check?usuario_id=${userId}&torneo_id=${t.id}`);
+          const data = await r.json();
+          return [t.id, !!data.enrolled] as [number, boolean];
+        } catch {
+          return [t.id, false] as [number, boolean];
+        }
+      })
+    );
+    setEnrolledMap(Object.fromEntries(entries));
   };
 
   const handleRegister = async (tournamentId: number) => {
@@ -70,6 +92,26 @@ const AllTournaments = () => {
         return;
       }
       toast.success("¡Inscripción exitosa!");
+      setEnrolledMap(prev => ({ ...prev, [tournamentId]: true }));
+      fetchTournaments();
+    } catch {
+      toast.error("Error al conectar con el servidor");
+    }
+  };
+
+  const handleUnregister = async (tournamentId: number) => {
+    if (!isLoggedIn || !user?.id) return;
+    try {
+      const response = await fetch(`${API_URL}/inscripciones/${tournamentId}/${user.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || "Error al cancelar inscripción");
+        return;
+      }
+      toast.success("Inscripción cancelada");
+      setEnrolledMap(prev => ({ ...prev, [tournamentId]: false }));
       fetchTournaments();
     } catch {
       toast.error("Error al conectar con el servidor");
@@ -165,10 +207,27 @@ const AllTournaments = () => {
           {sortedTournaments.length > 0 ? (
             sortedTournaments.map((tournament) => {
               const statusInfo = getStatusInfo(tournament);
+              const isEnrolled = isLoggedIn && !!enrolledMap[tournament.id];
+              const canUnregister = isEnrolled && statusInfo.available && !tournament.bracketIniciado;
               return (
                 <div className={`tournament-item ${statusInfo.className}`} key={tournament.id}>
                   <div className="tournament-item-header">
-                    <h3>{tournament.name}</h3>
+                    <h3>
+                      {tournament.name}
+                      {isEnrolled && (
+                        <span style={{
+                          marginLeft: "10px",
+                          fontSize: "0.7rem",
+                          background: "linear-gradient(135deg, #10b981, #059669)",
+                          color: "#fff",
+                          padding: "3px 10px",
+                          borderRadius: "20px",
+                          fontWeight: 700,
+                          letterSpacing: "0.5px",
+                          verticalAlign: "middle"
+                        }}>✓ Inscrito</span>
+                      )}
+                    </h3>
                     <span className={`status-badge ${statusInfo.className}`}>{statusInfo.message}</span>
                   </div>
 
@@ -179,6 +238,9 @@ const AllTournaments = () => {
                     <div className="detail"><span className="detail-icon">📅</span><span>Inicio: {formatDate(tournament.startDate)}</span></div>
                     <div className="detail"><span className="detail-icon">🏁</span><span>Fin: {formatDate(tournament.endDate)}</span></div>
                     {tournament.prize && <div className="detail"><span className="detail-icon">🎁</span><span>{tournament.prize}</span></div>}
+                    {tournament.createdByUsername && (
+                      <div className="detail"><span className="detail-icon">👤</span><span>Organiza: <strong style={{ color: "#a78bfa" }}>{tournament.createdByUsername}</strong></span></div>
+                    )}
                   </div>
 
                   <div className="progress-container">
@@ -189,7 +251,22 @@ const AllTournaments = () => {
                   </div>
 
                   <div className="tournament-item-footer">
-                    {statusInfo.available ? (
+                    {isEnrolled ? (
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <button className="register-btn disabled" disabled style={{ cursor: "default" }}>
+                          ✅ Ya estás inscrito
+                        </button>
+                        {canUnregister && (
+                          <button
+                            className="register-btn"
+                            onClick={() => handleUnregister(tournament.id)}
+                            style={{ background: "linear-gradient(135deg, #ef4444, #b91c1c)" }}
+                          >
+                            ❌ Cancelar inscripción
+                          </button>
+                        )}
+                      </div>
+                    ) : statusInfo.available ? (
                       <button className="register-btn" onClick={() => handleRegister(tournament.id)}>
                         Inscribirse
                       </button>

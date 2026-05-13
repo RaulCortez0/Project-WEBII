@@ -38,10 +38,12 @@ const TournamentManager = () => {
     const isDateExpired = currentDate > endDate;
     const isFull = tournament.registeredPlayers >= tournament.players;
 
-    if (isDateExpired) return "Torneo finalizado";
-    if (isFull || tournament.status === 'finalizado') return "Torneo cerrado - Cupo lleno";
+    if (tournament.status === "finalizado") return "Finalizado";
+    if (tournament.status === "en curso" || tournament.bracketIniciado) return "En Curso";
+    if (isDateExpired) return "Finalizado";
+    if (isFull || tournament.status === 'finalizado') return "Cupo lleno";
     const availableSpots = tournament.players - tournament.registeredPlayers;
-    return `Disponible - ${availableSpots} cupos`;
+    return `${availableSpots} cupos`;
   };
 
   const getRecentTournaments = () => {
@@ -88,9 +90,9 @@ const TournamentManager = () => {
   };
 
   const getStatusClass = (status: string) => {
-    if (status.includes("Disponible")) return "status-available";
-    if (status.includes("cerrado") || status.includes("Cupo lleno")) return "status-full";
-    if (status.includes("finalizado")) return "status-closed";
+    if (status === "Cupo lleno") return "status-full";
+    if (status === "Finalizado" || status === "En Curso") return "status-closed";
+    if (status.includes("cupos")) return "status-available";
     return "status-available";
   };
 
@@ -156,10 +158,12 @@ const TournamentManager = () => {
           <div className="tournaments-grid">
             {activeTournaments.map((tournament) => (
               <div className={`tournament-card-active ${getStatusClass(tournament.status)}`} key={tournament.id}>
-                <div className={`tournament-status ${getStatusClass(tournament.status)}`}>
-                  {tournament.status}
+                <div className="tm-card-header">
+                  <h3>{tournament.name}</h3>
+                  <div className={`tournament-status ${getStatusClass(tournament.status)}`}>
+                    {tournament.status}
+                  </div>
                 </div>
-                <h3>{tournament.name}</h3>
                 <div className="tournament-details">
                   <div className="detail-item">
                     <span className="detail-label">🎮 Juego:</span>

@@ -276,11 +276,13 @@ app.get("/torneos", async (req, res) => {
         t.fecha_inicio as startDate, t.fecha_fin as endDate,
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
-        t.creado_por as createdBy, t.premio as prize, t.reglas as rules,
+        t.creado_por as createdBy, uc.username as createdByUsername,
+        t.premio as prize, t.reglas as rules,
         t.bracket_iniciado as bracketIniciado,
         COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
+      LEFT JOIN Usuarios uc ON t.creado_por = uc.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
       WHERE t.estado != 'eliminado'
       GROUP BY t.id ORDER BY t.fecha_inicio DESC
@@ -302,10 +304,12 @@ app.get("/torneos/usuario/:userId", async (req, res) => {
         t.fecha_inicio as startDate, t.fecha_fin as endDate,
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
+        t.creado_por as createdBy, uc.username as createdByUsername,
         t.premio as prize, t.reglas as rules, t.bracket_iniciado as bracketIniciado,
-        COUNT(i.id) as registeredPlayers
+        t.juego_id as gameId, COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
+      LEFT JOIN Usuarios uc ON t.creado_por = uc.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
       WHERE t.creado_por = :userId
       GROUP BY t.id ORDER BY t.fecha_inicio DESC
@@ -326,7 +330,8 @@ app.get("/torneos/:id", async (req, res) => {
         t.fecha_inicio as startDate, t.fecha_fin as endDate,
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
-        t.creado_por as createdBy, t.premio as prize, t.reglas as rules,
+        t.creado_por as createdBy, uc.username as createdByUsername,
+        t.premio as prize, t.reglas as rules,
         t.juego_id as gameId, t.bracket_iniciado as bracketIniciado,
         ug.username as ganadorNombre, t.ganador_id as ganadorId,
         COUNT(i.id) as registeredPlayers
@@ -334,6 +339,7 @@ app.get("/torneos/:id", async (req, res) => {
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
       LEFT JOIN Usuarios ug ON t.ganador_id = ug.id
+      LEFT JOIN Usuarios uc ON t.creado_por = uc.id
       WHERE t.id = :id GROUP BY t.id
     `, { replacements: { id }, type: QueryTypes.SELECT });
 
@@ -349,6 +355,7 @@ app.get("/torneos/:id", async (req, res) => {
     res.status(500).json({ error: "Error al obtener el torneo" });
   }
 });
+
 
 app.post("/torneos", async (req, res) => {
   const { nombre, juego_id, fecha_inicio, fecha_fin, max_participantes, descripcion, formato, premio, reglas, creado_por } = req.body;
@@ -528,14 +535,21 @@ app.get("/admin/reportes/ocupacion-torneos", async (req, res) => {
   logger.info("GET /admin/reportes/ocupacion-torneos");
   try {
     const results = await sequelize.query(`
-      SELECT t.id, t.nombre, v.nombre_juego as juego, t.estado,
+      SELECT t.id, t.nombre, v.nombre_juego as juego,
+        CASE
+          WHEN t.estado = 'eliminado' THEN 'eliminado'
+          WHEN t.estado = 'finalizado' THEN 'finalizado'
+          WHEN t.estado = 'en curso' OR t.bracket_iniciado = 1 THEN 'en curso'
+          WHEN t.fecha_fin < NOW() THEN 'finalizado'
+          ELSE t.estado
+        END as estado,
         t.max_participantes,
         COUNT(i.id) as inscritos,
         ROUND((COUNT(i.id) / t.max_participantes) * 100, 1) as porcentaje_llenado
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
-      GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.max_participantes
+      GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.bracket_iniciado, t.fecha_fin, t.max_participantes
       ORDER BY porcentaje_llenado DESC
     `, { type: QueryTypes.SELECT });
     res.json(results.map(r => ({
@@ -555,7 +569,11 @@ app.get("/admin/reportes/disponibilidad-cupos", async (req, res) => {
   logger.info("GET /admin/reportes/disponibilidad-cupos");
   try {
     const results = await sequelize.query(`
-      SELECT t.id, t.nombre, v.nombre_juego as juego, t.estado,
+      SELECT t.id, t.nombre, v.nombre_juego as juego,
+        CASE
+          WHEN t.estado = 'en curso' OR t.bracket_iniciado = 1 THEN 'en curso'
+          ELSE t.estado
+        END as estado,
         t.max_participantes,
         COUNT(i.id) as inscritos,
         (t.max_participantes - COUNT(i.id)) as cupos_disponibles
@@ -563,7 +581,10 @@ app.get("/admin/reportes/disponibilidad-cupos", async (req, res) => {
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
       WHERE t.estado IN ('abierto', 'en curso')
-      GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.max_participantes
+        AND t.estado != 'eliminado'
+        AND t.estado != 'finalizado'
+        AND t.fecha_fin >= NOW()
+      GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.bracket_iniciado, t.max_participantes
       ORDER BY cupos_disponibles ASC
     `, { type: QueryTypes.SELECT });
     res.json(results.map(r => ({
@@ -1078,6 +1099,22 @@ app.get("/videojuegos", async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INSCRIPCIONES
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Verificar si un usuario ya está inscrito en un torneo ────────────────────
+app.get("/inscripciones/check", async (req, res) => {
+  const { usuario_id, torneo_id } = req.query;
+  if (!usuario_id || !torneo_id) return res.status(400).json({ error: "Faltan parámetros" });
+  try {
+    const [existing] = await sequelize.query(
+      "SELECT id FROM Inscripciones WHERE usuario_id = :usuario_id AND torneo_id = :torneo_id",
+      { replacements: { usuario_id, torneo_id }, type: QueryTypes.SELECT }
+    );
+    res.json({ enrolled: !!existing });
+  } catch (error) {
+    logger.error("GET /inscripciones/check — Error:", error);
+    res.status(500).json({ error: "Error al verificar inscripción" });
+  }
+});
 
 app.post("/inscripciones", async (req, res) => {
   const { usuario_id, torneo_id } = req.body;
