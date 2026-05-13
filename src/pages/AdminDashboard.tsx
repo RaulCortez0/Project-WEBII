@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "react-toastify";
 import "./AdminDashboard.css";
 
 const API_URL = "http://localhost:3001";
 
-type Tab = "torneos" | "popularidad" | "ranking" | "ocupacion" | "cupos";
+type Tab = "torneos" | "popularidad" | "ranking" | "campeones" | "ocupacion" | "cupos";
 
 interface Torneo {
   id: number;
@@ -22,6 +23,7 @@ interface Torneo {
   rules: string;
   gameId: number;
   registeredPlayers: number;
+  bracketIniciado: number;
 }
 
 interface PopularidadRow {
@@ -40,6 +42,18 @@ interface RankingRow {
   role: string;
   victorias: number;
   torneos_participados: number;
+}
+
+interface CampeonesRow {
+  id: number;
+  username: string;
+  email: string;
+  torneos_ganados: number;
+  partidas_jugadas: number;
+  partidas_ganadas: number;
+  partidas_perdidas: number;
+  pct_victorias: number;
+  pct_derrotas: number;
 }
 
 interface OcupacionRow {
@@ -94,6 +108,7 @@ const AdminDashboard = () => {
   const [torneos, setTorneos] = useState<Torneo[]>([]);
   const [popularidad, setPopularidad] = useState<PopularidadRow[]>([]);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [campeones, setCampeones] = useState<CampeonesRow[]>([]);
   const [ocupacion, setOcupacion] = useState<OcupacionRow[]>([]);
   const [cupos, setCupos] = useState<CuposRow[]>([]);
   const [games, setGames] = useState<Game[]>([]);
@@ -102,7 +117,7 @@ const AdminDashboard = () => {
   const [editForm, setEditForm] = useState<Partial<Torneo>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deleteMotivo, setDeleteMotivo] = useState("");
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [deleteType, setDeleteType] = useState<"logico" | "real">("logico");
 
   // Guard: solo admin
   useEffect(() => {
@@ -120,8 +135,8 @@ const AdminDashboard = () => {
   }, [isLoggedIn, user]);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    if (type === "success") toast.success(msg);
+    else toast.error(msg);
   };
 
   const fetchTorneos = async () => {
@@ -143,6 +158,7 @@ const AdminDashboard = () => {
     const map: Partial<Record<Tab, string>> = {
       popularidad: "popularidad-juegos",
       ranking: "ranking-jugadores",
+      campeones: "campeones",
       ocupacion: "ocupacion-torneos",
       cupos: "disponibilidad-cupos",
     };
@@ -155,6 +171,7 @@ const AdminDashboard = () => {
       const data = await r.json();
       if (tab === "popularidad") setPopularidad(data);
       else if (tab === "ranking") setRanking(data);
+      else if (tab === "campeones") setCampeones(data);
       else if (tab === "ocupacion") setOcupacion(data);
       else if (tab === "cupos") setCupos(data);
     } catch {
@@ -227,15 +244,19 @@ const AdminDashboard = () => {
   const handleDelete = async (id: number) => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_URL}/admin/torneos/${id}`, {
+      const endpoint = deleteType === "real"
+        ? `${API_URL}/admin/torneos/${id}/real`
+        : `${API_URL}/admin/torneos/${id}/logico`;
+      const r = await fetch(endpoint, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ motivo: deleteMotivo.trim() || null }),
       });
       if (!r.ok) throw new Error((await r.json()).error);
-      showToast("Torneo eliminado lógicamente");
+      showToast(deleteType === "real" ? "Torneo eliminado permanentemente" : "Torneo eliminado lógicamente");
       setDeleteConfirm(null);
       setDeleteMotivo("");
+      setDeleteType("logico");
       fetchTorneos();
     } catch (err: any) {
       showToast(err.message ?? "Error al eliminar", "error");
@@ -248,6 +269,7 @@ const AdminDashboard = () => {
     { id: "torneos", label: "Gestión de Torneos", icon: "🏆" },
     { id: "popularidad", label: "Popularidad de Juegos", icon: "🎮" },
     { id: "ranking", label: "Ranking de Jugadores", icon: "👑" },
+    { id: "campeones", label: "Campeones", icon: "🥇" },
     { id: "ocupacion", label: "Ocupación de Torneos", icon: "📊" },
     { id: "cupos", label: "Disponibilidad de Cupos", icon: "🪑" },
   ];
@@ -258,13 +280,6 @@ const AdminDashboard = () => {
 
   return (
     <main className="admin-dashboard">
-      {/* Toast */}
-      {toast && (
-        <div className={`admin-toast ${toast.type}`}>
-          {toast.type === "success" ? "✅" : "❌"} {toast.msg}
-        </div>
-      )}
-
       {/* Header */}
       <section className="admin-hero">
         <div className="admin-hero-overlay" />
@@ -454,6 +469,76 @@ const AdminDashboard = () => {
           </section>
         )}
 
+        {/* ── TAB: Campeones ────────────────────────────────────────────── */}
+        {activeTab === "campeones" && !loading && (
+          <section className="admin-section">
+            <div className="section-header">
+              <h2>🥇 Reporte de Campeones</h2>
+              <p className="section-desc">Jugadores con más torneos ganados y estadísticas de victorias/derrotas en partidas.</p>
+            </div>
+            {campeones.length === 0 && <p className="empty-state">No hay datos de campeones aún.</p>}
+            {campeones.length > 0 && (
+              <div className="table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Jugador</th>
+                      <th>Email</th>
+                      <th>🏆 Torneos Ganados</th>
+                      <th>⚔️ Partidas</th>
+                      <th>✅ Victorias</th>
+                      <th>❌ Derrotas</th>
+                      <th>% Victorias</th>
+                      <th>% Derrotas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campeones.map((r, i) => (
+                      <tr key={r.id}>
+                        <td>
+                          <span className={`rank-badge ${i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : ""}`}>
+                            {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
+                          </span>
+                        </td>
+                        <td className="td-name">
+                          <div className="player-cell">
+                            <div className="avatar-mini">{r.username[0].toUpperCase()}</div>
+                            {r.username}
+                          </div>
+                        </td>
+                        <td className="td-email">{r.email}</td>
+                        <td><span className="metric metric-torneos">{r.torneos_ganados}</span></td>
+                        <td><span className="metric">{r.partidas_jugadas}</span></td>
+                        <td><span className="metric metric-torneos">{r.partidas_ganadas}</span></td>
+                        <td><span className="metric metric-inscritos">{r.partidas_perdidas}</span></td>
+                        <td>
+                          <div className="pct-cell">
+                            <div className="pct-bar">
+                              <div className={`pct-fill ${r.pct_victorias >= 70 ? "pct-ok" : r.pct_victorias >= 40 ? "pct-warn" : "pct-danger"}`}
+                                style={{ width: `${r.pct_victorias}%` }} />
+                            </div>
+                            <span className="pct-label">{r.pct_victorias}%</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="pct-cell">
+                            <div className="pct-bar">
+                              <div className={`pct-fill ${r.pct_derrotas <= 30 ? "pct-ok" : r.pct_derrotas <= 60 ? "pct-warn" : "pct-danger"}`}
+                                style={{ width: `${r.pct_derrotas}%` }} />
+                            </div>
+                            <span className="pct-label">{r.pct_derrotas}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ── TAB: Ocupación de Torneos ─────────────────────────────────── */}
         {activeTab === "ocupacion" && !loading && (
           <section className="admin-section">
@@ -509,46 +594,46 @@ const AdminDashboard = () => {
           <section className="admin-section">
             <div className="section-header">
               <h2>🪑 Disponibilidad de Cupos</h2>
-              <p className="section-desc">Lista de torneos donde el conteo de Inscripciones es menor al max_participantes.</p>
+              <p className="section-desc">Torneos activos (abiertos o en curso) con cupos disponibles.</p>
             </div>
-            <div className="cards-grid">
-              {cupos.length === 0 && (
-                <p className="empty-state">Todos los torneos están llenos o no hay torneos activos.</p>
+            <div className="table-wrapper">
+              {cupos.length === 0 && <p className="empty-state">Todos los torneos están llenos o no hay torneos activos.</p>}
+              {cupos.length > 0 && (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Torneo</th>
+                      <th>Juego</th>
+                      <th>Estado</th>
+                      <th>Inscritos</th>
+                      <th>Máximo</th>
+                      <th>Cupos Libres</th>
+                      <th>% Ocupado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cupos.map(r => (
+                      <tr key={r.id}>
+                        <td className="td-name">{r.nombre}</td>
+                        <td>{r.juego}</td>
+                        <td><span className={`status-chip ${statusClass[r.estado] ?? ""}`}>{statusLabel[r.estado] ?? r.estado}</span></td>
+                        <td>{r.inscritos}</td>
+                        <td>{r.max_participantes}</td>
+                        <td><span className="metric metric-inscritos">{r.cupos_disponibles}</span></td>
+                        <td>
+                          <div className="pct-cell">
+                            <div className="pct-bar">
+                              <div className={`pct-fill ${(r.inscritos/r.max_participantes*100) >= 90 ? 'pct-danger' : (r.inscritos/r.max_participantes*100) >= 60 ? 'pct-warn' : 'pct-ok'}`}
+                                style={{ width: `${Math.min((r.inscritos / r.max_participantes) * 100, 100)}%` }} />
+                            </div>
+                            <span className="pct-label">{Math.round((r.inscritos / r.max_participantes) * 100)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              {cupos.map(r => (
-                <div key={r.id} className="cupo-card">
-                  <div className="cupo-header">
-                    <h3>{r.nombre}</h3>
-                    <span className={`status-chip ${statusClass[r.estado] ?? ""}`}>
-                      {statusLabel[r.estado] ?? r.estado}
-                    </span>
-                  </div>
-                  <p className="cupo-game">🎮 {r.juego}</p>
-                  <div className="cupo-stats">
-                    <div className="cupo-stat">
-                      <span className="cupo-num available">{r.cupos_disponibles}</span>
-                      <span className="cupo-sub">cupos libres</span>
-                    </div>
-                    <div className="cupo-stat">
-                      <span className="cupo-num">{r.inscritos}</span>
-                      <span className="cupo-sub">inscritos</span>
-                    </div>
-                    <div className="cupo-stat">
-                      <span className="cupo-num">{r.max_participantes}</span>
-                      <span className="cupo-sub">máximo</span>
-                    </div>
-                  </div>
-                  <div className="cupo-bar-wrap">
-                    <div className="cupo-bar">
-                      <div
-                        className="cupo-bar-fill"
-                        style={{ width: `${Math.min((r.inscritos / r.max_participantes) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span>{Math.round((r.inscritos / r.max_participantes) * 100)}% ocupado</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </section>
         )}
@@ -626,27 +711,57 @@ const AdminDashboard = () => {
 
       {/* ── Confirm Delete ───────────────────────────────────────────────── */}
       {deleteConfirm !== null && (
-        <div className="modal-overlay" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); }}>
+        <div className="modal-overlay" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); setDeleteType("logico"); }}>
           <div className="modal-box confirm-box" onClick={e => e.stopPropagation()}>
             <div className="confirm-icon">🗑️</div>
             <h2>¿Eliminar este torneo?</h2>
-            <p>El torneo será marcado como <strong>eliminado</strong> pero permanecerá en la base de datos (eliminación lógica).</p>
-            <div className="mf-group" style={{ textAlign: "left", marginBottom: "16px" }}>
-              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>
-                Motivo de eliminación <span style={{ color: "#475569", fontWeight: 400 }}>(opcional)</span>
-              </label>
-              <textarea
-                value={deleteMotivo}
-                onChange={e => setDeleteMotivo(e.target.value)}
-                placeholder="Ej: Torneo duplicado, sin participantes suficientes..."
-                rows={3}
-                style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#e2e8f0", padding: "10px 14px", fontSize: "0.88rem", fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", boxSizing: "border-box" }}
-              />
+
+            {/* Tipo de eliminación */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "16px", justifyContent: "center" }}>
+              <button
+                onClick={() => setDeleteType("logico")}
+                style={{ padding: "8px 18px", borderRadius: "8px", border: "2px solid", borderColor: deleteType === "logico" ? "#f59e0b" : "#334155", background: deleteType === "logico" ? "rgba(245,158,11,0.15)" : "transparent", color: deleteType === "logico" ? "#f59e0b" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}
+              >
+                Baja Lógica
+              </button>
+              <button
+                onClick={() => setDeleteType("real")}
+                style={{ padding: "8px 18px", borderRadius: "8px", border: "2px solid", borderColor: deleteType === "real" ? "#ef4444" : "#334155", background: deleteType === "real" ? "rgba(239,68,68,0.15)" : "transparent", color: deleteType === "real" ? "#ef4444" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}
+              >
+                Eliminación Real
+              </button>
             </div>
+
+            <p style={{ color: "#94a3b8", marginBottom: "12px", fontSize: "0.9rem" }}>
+              {deleteType === "real"
+                ? "⚠️ El torneo y todos sus datos (partidas, inscripciones) serán eliminados PERMANENTEMENTE."
+                : "El torneo será marcado como eliminado pero permanecerá en la base de datos."}
+            </p>
+
+            {deleteType === "logico" && (
+              <div className="mf-group" style={{ textAlign: "left", marginBottom: "16px" }}>
+                <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>
+                  Motivo <span style={{ color: "#475569", fontWeight: 400 }}>(opcional)</span>
+                </label>
+                <textarea
+                  value={deleteMotivo}
+                  onChange={e => setDeleteMotivo(e.target.value)}
+                  placeholder="Ej: Torneo duplicado, sin participantes suficientes..."
+                  rows={3}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#e2e8f0", padding: "10px 14px", fontSize: "0.88rem", fontFamily: "Inter, sans-serif", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+            )}
+
             <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); }}>Cancelar</button>
-              <button className="btn-delete-confirm" onClick={() => handleDelete(deleteConfirm)} disabled={loading}>
-                {loading ? "Eliminando..." : "Sí, eliminar"}
+              <button className="btn-cancel" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); setDeleteType("logico"); }}>Cancelar</button>
+              <button
+                className="btn-delete-confirm"
+                style={{ background: deleteType === "real" ? "#dc2626" : undefined }}
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={loading}
+              >
+                {loading ? "Eliminando..." : deleteType === "real" ? "⚠️ Eliminar permanentemente" : "Sí, eliminar"}
               </button>
             </div>
           </div>

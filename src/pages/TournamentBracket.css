@@ -17,13 +17,13 @@
   border-bottom: 1px solid rgba(245,158,11,0.3);
   animation: shimmer 3s ease-in-out infinite;
   position: relative;
-  overflow: hidden;
 }
 .champion-banner::before {
   content: "";
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse at 50% 50%, rgba(245,158,11,0.12) 0%, transparent 70%);
+  pointer-events: none;
 }
 @keyframes shimmer {
   0%, 100% { box-shadow: 0 0 20px rgba(245,158,11,0.1); }
@@ -43,6 +43,11 @@
   font-size: 2rem; font-weight: 800; margin: 0;
   background: linear-gradient(135deg, #fbbf24, #f59e0b, #fde68a);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+/* Button inside champion-banner must sit above ::before overlay */
+.champion-banner .bracket-generate-btn {
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Toast ─────────────────────────────────────────────────────── */

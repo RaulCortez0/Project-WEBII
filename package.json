@@ -24,6 +24,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
+    "react-toastify": "^11.1.0",
     "sequelize": "^6.37.8",
     "winston": "^3.19.0"
   },

@@ -1,497 +1,395 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "react-toastify";
 import "./EditTournament.css";
 
-interface Game {
+interface Game { id: number; nombre_juego: string; }
+interface Tournament {
   id: number;
-  nombre_juego: string;
-}
-
-interface TournamentForm {
-  id: number;
-  title: string;
-  gameId: string;
-  gameType: string;
-  eliminationType: string;
-  maxPlayers: string;
+  name: string;
+  game: string;
+  gameId: number;
+  type: string;
+  players: number;
+  registeredPlayers: number;
   startDate: string;
   endDate: string;
-  description: string;
-  rules: string;
-  prize: string;
   status: string;
+  bracketIniciado?: number;
+  description?: string;
+  prize?: string;
+  rules?: string;
 }
 
 const API_URL = "http://localhost:3001";
 
-const EditTournament = () => {
+const STATUS_LABELS: Record<string, string> = {
+  abierto: "Abierto",
+  "en curso": "En Curso",
+  finalizado: "Finalizado",
+  eliminado: "Eliminado",
+};
+const STATUS_COLOR: Record<string, string> = {
+  abierto: "#22c55e",
+  "en curso": "#f59e0b",
+  finalizado: "#6366f1",
+  eliminado: "#ef4444",
+};
+
+export default function EditTournament() {
   const navigate = useNavigate();
   const { user, isLoggedIn } = useAuth();
-  const [userTournaments, setUserTournaments] = useState<any[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
-  const [formData, setFormData] = useState<TournamentForm>({
-    id: 0,
-    title: "",
-    gameId: "",
-    gameType: "",
-    eliminationType: "simple",
-    maxPlayers: "16",
-    startDate: "",
-    endDate: "",
-    description: "",
-    rules: "",
-    prize: "",
-    status: "abierto"
-  });
-  const [errors, setErrors] = useState<Partial<TournamentForm>>({});
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const isAdmin = user?.role === "admin";
 
-  // Cargar torneos del usuario y juegos
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // Edit modal
+  const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Tournament>>({});
+  const [saving, setSaving] = useState(false);
+
+  // Delete confirm
+  const [deleteConfirm, setDeleteConfirm] = useState<Tournament | null>(null);
+  const [deleteMotivo, setDeleteMotivo] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
-    if (isLoggedIn && user?.id) {
-      fetchUserTournaments();
-      fetchGames();
-    }
+    if (!isLoggedIn) { navigate("/login"); return; }
+    fetchData();
   }, [isLoggedIn, user]);
 
-  const fetchUserTournaments = async () => {
-    try {
-      const response = await fetch(`${API_URL}/torneos/usuario/${user?.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setUserTournaments(data);
-      }
-    } catch (err) {
-      console.error("Error al cargar torneos:", err);
-    }
-  };
-
-  const fetchGames = async () => {
-    try {
-      const response = await fetch(`${API_URL}/videojuegos`);
-      if (response.ok) {
-        const data = await response.json();
-        setGames(data);
-      }
-    } catch (err) {
-      console.error("Error al cargar juegos:", err);
-    }
-  };
-
-  const hasTournaments = userTournaments.length > 0;
-
-  const gameTypes = [
-    "MOBA", "FPS", "Battle Royale", "Deportes", "Lucha", "Estrategia", "Carreras", "Otro"
-  ];
-
-  const eliminationTypes = [
-    { value: "simple", label: "Eliminación Simple" },
-    { value: "double", label: "Doble Eliminación" },
-    { value: "league", label: "Liga (Todos contra todos)" },
-    { value: "group", label: "Fase de grupos + Eliminación" },
-    { value: "swiss", label: "Sistema Suizo" }
-  ];
-
-  const playerLimits = ["4", "8", "16", "32", "64", "128", "256"];
-  const statusOptions = ["abierto", "en curso", "finalizado"];
-
-  // Cargar datos del torneo seleccionado
-  const handleTournamentSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    setSelectedTournamentId(id);
-    
-    if (id) {
-      const selectedTournament = userTournaments.find(t => t.id.toString() === id);
-      if (selectedTournament) {
-        setFormData({
-          id: selectedTournament.id,
-          title: selectedTournament.name,
-          gameId: selectedTournament.gameId?.toString() || "",
-          gameType: selectedTournament.gameType || "MOBA",
-          eliminationType: selectedTournament.type === "Eliminación Simple" ? "simple" : 
-                          selectedTournament.type === "Doble Eliminación" ? "double" : "league",
-          maxPlayers: selectedTournament.players?.toString() || "16",
-          startDate: selectedTournament.startDate ? selectedTournament.startDate.split('T')[0] : "",
-          endDate: selectedTournament.endDate ? selectedTournament.endDate.split('T')[0] : "",
-          description: selectedTournament.description || "",
-          rules: selectedTournament.rules || "",
-          prize: selectedTournament.prize || "",
-          status: selectedTournament.status || "abierto"
-        });
-      }
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    if (errors[name as keyof TournamentForm]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ""
-      }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: Partial<TournamentForm> = {};
-    let isValid = true;
-
-    if (!formData.title.trim()) {
-      newErrors.title = "El título del torneo es requerido";
-      isValid = false;
-    } else if (formData.title.length < 5) {
-      newErrors.title = "El título debe tener al menos 5 caracteres";
-      isValid = false;
-    }
-
-    if (!formData.gameId) {
-      newErrors.gameId = "Selecciona un juego";
-      isValid = false;
-    }
-
-    if (!formData.startDate) {
-      newErrors.startDate = "Selecciona la fecha de inicio";
-      isValid = false;
-    }
-
-    if (!formData.endDate) {
-      newErrors.endDate = "Selecciona la fecha de fin";
-      isValid = false;
-    }
-
-    if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
-      newErrors.endDate = "La fecha de fin debe ser posterior a la fecha de inicio";
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!isLoggedIn || !user?.id) {
-      alert("Debes iniciar sesión para editar un torneo");
-      return;
-    }
-
-    if (!validateForm()) return;
-
+  const fetchData = async () => {
     setLoading(true);
-
     try {
-      const response = await fetch(`${API_URL}/torneos/${formData.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: formData.title,
-          juego_id: parseInt(formData.gameId),
-          fecha_inicio: formData.startDate,
-          fecha_fin: formData.endDate,
-          max_participantes: parseInt(formData.maxPlayers),
-          descripcion: formData.description,
-          estado: formData.status,
-          formato: eliminationTypes.find(t => t.value === formData.eliminationType)?.label || formData.eliminationType,
-          premio: formData.prize,
-          reglas: formData.rules,
-          creado_por: user.id
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || "Error al actualizar el torneo");
-        setLoading(false);
-        return;
-      }
-
-      setShowSuccess(true);
-      setTimeout(() => {
-        navigate("/torneos");
-      }, 2000);
-    } catch (err) {
-      alert("Error al conectar con el servidor");
+      // Always load the user's OWN tournaments — admin has AdminDashboard for all
+      const [tRes, gRes] = await Promise.all([
+        fetch(`${API_URL}/torneos/usuario/${user?.id}`),
+        fetch(`${API_URL}/videojuegos`)
+      ]);
+      const tData = await tRes.json();
+      const gData = await gRes.json();
+      setTournaments(Array.isArray(tData) ? tData : []);
+      setGames(Array.isArray(gData) ? gData : []);
+    } catch {
+      toast.error("Error al cargar torneos");
     } finally {
       setLoading(false);
     }
   };
 
+  const openEdit = (t: Tournament) => {
+    setEditingTournament(t);
+    setEditForm({
+      name: t.name,
+      gameId: t.gameId,
+      type: t.type,
+      players: t.players,
+      startDate: t.startDate?.slice(0, 10),
+      endDate: t.endDate?.slice(0, 10),
+      description: t.description || "",
+      prize: t.prize || "",
+      rules: t.rules || "",
+      status: t.status,
+    });
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setEditForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTournament) return;
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_URL}/torneos/${editingTournament.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: editForm.name,
+          juego_id: editForm.gameId,
+          fecha_inicio: editForm.startDate,
+          fecha_fin: editForm.endDate,
+          max_participantes: editForm.players,
+          descripcion: editForm.description,
+          estado: editForm.status,
+          formato: editForm.type,
+          premio: editForm.prize,
+          reglas: editForm.rules,
+          creado_por: user?.id,
+          isAdmin,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      toast.success("✅ Torneo actualizado exitosamente");
+      setEditingTournament(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message ?? "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      const r = await fetch(`${API_URL}/torneos/${deleteConfirm.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creado_por: user?.id, motivo: deleteMotivo.trim() || null, isAdmin }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      toast.success("🗑️ Torneo eliminado correctamente");
+      setDeleteConfirm(null);
+      setDeleteMotivo("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message ?? "Error al eliminar");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const canEdit = (t: Tournament) => {
+    if (isAdmin) return true;
+    if (t.status === "eliminado" || t.status === "finalizado") return false;
+    if (t.bracketIniciado && t.status !== "finalizado") return false;
+    return true;
+  };
+
+  const canDelete = (t: Tournament) => {
+    if (isAdmin) return true;
+    if (t.status === "eliminado") return false;
+    if (t.bracketIniciado && t.status !== "finalizado") return false;
+    return true;
+  };
+
+  const filtered = tournaments.filter(t =>
+    t.name?.toLowerCase().includes(search.toLowerCase()) ||
+    t.game?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fmt = (d: string) => d ? new Date(d).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+
   return (
-    <main className="edit-tournament">
-      <section className="edit-hero">
-        <div className="edit-hero-overlay"></div>
-        <div className="edit-hero-content">
-          <h1>EDITAR TORNEO</h1>
-          <p>Selecciona un torneo que hayas creado y modifica sus datos</p>
+    <main className="edit-tournament-page">
+      <section className="et-hero">
+        <div className="et-hero-overlay" />
+        <div className="et-hero-content">
+          <div className="et-badge">{isAdmin ? "ADMIN" : "MIS TORNEOS"}</div>
+          <h1>Gestionar Torneos</h1>
+          <p>{isAdmin ? "Edita o elimina cualquier torneo del sistema" : "Edita o elimina tus torneos creados"}</p>
         </div>
       </section>
 
-      <section className="edit-form-section">
-        <div className="form-container">
-          {showSuccess && (
-            <div className="success-message">
-              <span className="success-icon">✅</span>
-              <h3>¡Torneo actualizado exitosamente!</h3>
-              <p>Serás redirigido a la lista de torneos...</p>
-            </div>
-          )}
+      <div className="et-body">
+        {/* Search */}
+        <div className="et-search-bar">
+          <span className="et-search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Buscar por nombre o juego..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && <button className="et-clear" onClick={() => setSearch("")}>✕</button>}
+          <span className="et-count">{filtered.length} torneo{filtered.length !== 1 ? "s" : ""}</span>
+        </div>
 
-          <form onSubmit={handleSubmit} className="tournament-form">
-            <div className="form-row">
-              <div className="form-group full-width selector-group">
-                <label htmlFor="tournamentSelect">Seleccionar Torneo a Editar *</label>
-                <select
-                  id="tournamentSelect"
-                  value={selectedTournamentId}
-                  onChange={handleTournamentSelect}
-                  className="tournament-select"
-                  disabled={!hasTournaments}
-                >
-                  <option value="">-- Selecciona un torneo --</option>
-                  {userTournaments.map(tournament => (
-                    <option key={tournament.id} value={tournament.id}>
-                      {tournament.name} - {tournament.game}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        {/* Cards grid */}
+        {loading ? (
+          <div className="et-empty"><div className="et-spinner" /><p>Cargando torneos...</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="et-empty">
+            <span style={{ fontSize: 48 }}>🎮</span>
+            <h3>{search ? "Sin resultados" : "No tienes torneos creados"}</h3>
+            <p>{search ? "Prueba con otro término" : "Crea tu primer torneo para empezar"}</p>
+            {!search && <button className="et-create-btn" onClick={() => navigate("/crear-torneo")}>+ Crear Torneo</button>}
+          </div>
+        ) : (
+          <div className="et-cards">
+            {filtered.map(t => (
+              <div className={`et-card ${t.status === "eliminado" ? "et-card-eliminated" : ""}`} key={t.id}>
+                {/* Status badge */}
+                <div className="et-card-status" style={{ background: STATUS_COLOR[t.status] ?? "#64748b" }}>
+                  {STATUS_LABELS[t.status] ?? t.status}
+                  {t.bracketIniciado && t.status !== "finalizado" && t.status !== "eliminado" && (
+                    <span style={{ marginLeft: 6 }}>🔒</span>
+                  )}
+                </div>
 
-            {!hasTournaments && (
-              <div className="no-tournaments-message">
-                <span className="no-tournaments-icon">🏆</span>
-                <h3>No tienes torneos creados</h3>
-                <p>Para editar un torneo, primero debes crear uno.</p>
-                <Link to="/crear-torneo" className="create-tournament-link">
-                  Crear mi primer torneo
-                </Link>
-              </div>
-            )}
+                <div className="et-card-body">
+                  <h3 className="et-card-name">{t.name}</h3>
+                  <div className="et-card-details">
+                    <div className="et-detail"><span>🎮</span>{t.game || "—"}</div>
+                    <div className="et-detail"><span>🏆</span>{t.type || "—"}</div>
+                    <div className="et-detail"><span>👥</span>{t.registeredPlayers ?? 0}/{t.players} jugadores</div>
+                    <div className="et-detail"><span>📅</span>{fmt(t.startDate)} → {fmt(t.endDate)}</div>
+                    {t.prize && <div className="et-detail"><span>🎁</span>{t.prize}</div>}
+                  </div>
 
-            {hasTournaments && selectedTournamentId && (
-              <>
-                <div className="form-row">
-                  <div className="form-group full-width">
-                    <label htmlFor="title">Título del Torneo *</label>
-                    <input
-                      type="text"
-                      id="title"
-                      name="title"
-                      value={formData.title}
-                      onChange={handleChange}
-                      placeholder="Ej: Liga de Honor 2026"
-                      className={errors.title ? "error" : ""}
-                    />
-                    {errors.title && <span className="error-message">{errors.title}</span>}
+                  <div className="et-progress">
+                    <div className="et-progress-bar">
+                      <div className="et-progress-fill" style={{ width: `${Math.min(((t.registeredPlayers ?? 0) / t.players) * 100, 100)}%` }} />
+                    </div>
+                    <span>{Math.round(((t.registeredPlayers ?? 0) / t.players) * 100)}%</span>
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="gameId">Juego *</label>
-                    <select
-                      id="gameId"
-                      name="gameId"
-                      value={formData.gameId}
-                      onChange={handleChange}
-                      className={errors.gameId ? "error" : ""}
-                    >
-                      <option value="">Selecciona un juego</option>
-                      {games.map(game => (
-                        <option key={game.id} value={game.id}>{game.nombre_juego}</option>
-                      ))}
-                    </select>
-                    {errors.gameId && <span className="error-message">{errors.gameId}</span>}
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="gameType">Tipo de Juego *</label>
-                    <select
-                      id="gameType"
-                      name="gameType"
-                      value={formData.gameType}
-                      onChange={handleChange}
-                      className={errors.gameType ? "error" : ""}
-                    >
-                      <option value="">Selecciona un tipo</option>
-                      {gameTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                    {errors.gameType && <span className="error-message">{errors.gameType}</span>}
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="eliminationType">Tipo de Eliminación</label>
-                    <select
-                      id="eliminationType"
-                      name="eliminationType"
-                      value={formData.eliminationType}
-                      onChange={handleChange}
-                    >
-                      {eliminationTypes.map(type => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="maxPlayers">Límite de Jugadores *</label>
-                    <select
-                      id="maxPlayers"
-                      name="maxPlayers"
-                      value={formData.maxPlayers}
-                      onChange={handleChange}
-                      className={errors.maxPlayers ? "error" : ""}
-                    >
-                      {playerLimits.map(limit => (
-                        <option key={limit} value={limit}>{limit} jugadores</option>
-                      ))}
-                    </select>
-                    {errors.maxPlayers && <span className="error-message">{errors.maxPlayers}</span>}
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="startDate">Fecha de Inicio *</label>
-                    <input
-                      type="date"
-                      id="startDate"
-                      name="startDate"
-                      value={formData.startDate}
-                      onChange={handleChange}
-                      className={errors.startDate ? "error" : ""}
-                    />
-                    {errors.startDate && <span className="error-message">{errors.startDate}</span>}
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="endDate">Fecha de Fin *</label>
-                    <input
-                      type="date"
-                      id="endDate"
-                      name="endDate"
-                      value={formData.endDate}
-                      onChange={handleChange}
-                      className={errors.endDate ? "error" : ""}
-                    />
-                    {errors.endDate && <span className="error-message">{errors.endDate}</span>}
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="status">Estado del Torneo</label>
-                    <select
-                      id="status"
-                      name="status"
-                      value={formData.status}
-                      onChange={handleChange}
-                    >
-                      {statusOptions.map(status => (
-                        <option key={status} value={status}>
-                          {status === 'abierto' ? 'Abierto' : status === 'en curso' ? 'En curso' : 'Finalizado'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group full-width">
-                    <label htmlFor="description">Descripción del Torneo</label>
-                    <textarea
-                      id="description"
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
-                      rows={4}
-                      placeholder="Describe tu torneo, formato, horarios, etc."
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group full-width">
-                    <label htmlFor="rules">Reglas del Torneo</label>
-                    <textarea
-                      id="rules"
-                      name="rules"
-                      value={formData.rules}
-                      onChange={handleChange}
-                      rows={4}
-                      placeholder="Especifica las reglas, restricciones, mapa inicial, etc."
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group full-width">
-                    <label htmlFor="prize">Premio (Opcional)</label>
-                    <input
-                      type="text"
-                      id="prize"
-                      name="prize"
-                      value={formData.prize}
-                      onChange={handleChange}
-                      placeholder="Ej: $500 USD + Trofeo + Skin exclusiva"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-actions">
-                  <Link to="/torneos" className="cancel-btn">Cancelar</Link>
-                  <button type="submit" className="submit-btn" disabled={loading}>
-                    {loading ? "GUARDANDO..." : "Guardar Cambios"}
+                {/* Action buttons */}
+                <div className="et-card-actions">
+                  <button
+                    className="et-btn-view"
+                    onClick={() => navigate(`/torneo/${t.id}`)}
+                  >
+                    👁️ Ver
+                  </button>
+                  <button
+                    className={`et-btn-edit ${!canEdit(t) ? "et-btn-disabled" : ""}`}
+                    onClick={() => canEdit(t) && openEdit(t)}
+                    disabled={!canEdit(t)}
+                    title={!canEdit(t) ? (t.bracketIniciado ? "Bracket activo: solo admin puede editar" : "No editable") : "Editar torneo"}
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    className={`et-btn-delete ${!canDelete(t) ? "et-btn-disabled" : ""}`}
+                    onClick={() => canDelete(t) && setDeleteConfirm(t)}
+                    disabled={!canDelete(t)}
+                    title={!canDelete(t) ? (t.bracketIniciado ? "Bracket activo: solo admin puede eliminar" : "No eliminable") : "Eliminar torneo"}
+                  >
+                    🗑️ Eliminar
                   </button>
                 </div>
-              </>
-            )}
-          </form>
-        </div>
-      </section>
 
-      <section className="edit-tips">
-        <h2>Consejos para editar tu torneo</h2>
-        <div className="tips-grid">
-          <div className="tip-card">
-            <span className="tip-icon">📝</span>
-            <h3>Actualiza la información</h3>
-            <p>Mantén los datos del torneo siempre actualizados</p>
+                {/* Admin indicator */}
+                {isAdmin && !canEdit(t) && t.status !== "eliminado" && (
+                  <div className="et-admin-bypass">
+                    <span>⚠️ Admin: puedes editar/eliminar aunque esté en curso</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-          <div className="tip-card">
-            <span className="tip-icon">⏰</span>
-            <h3>Revisa las fechas</h3>
-            <p>Asegúrate que las fechas sean correctas</p>
-          </div>
-          <div className="tip-card">
-            <span className="tip-icon">📢</span>
-            <h3>Comunica los cambios</h3>
-            <p>Notifica a los participantes sobre modificaciones</p>
-          </div>
-          <div className="tip-card">
-            <span className="tip-icon">🎯</span>
-            <h3>Verifica los cupos</h3>
-            <p>Controla el límite de participantes</p>
+        )}
+      </div>
+
+      {/* ── Modal: Editar Torneo ───────────────────────────────── */}
+      {editingTournament && (
+        <div className="et-modal-overlay" onClick={() => setEditingTournament(null)}>
+          <div className="et-modal" onClick={e => e.stopPropagation()}>
+            <div className="et-modal-header">
+              <h2>✏️ Editar Torneo</h2>
+              <button className="et-modal-close" onClick={() => setEditingTournament(null)}>✕</button>
+            </div>
+
+            {!isAdmin && editingTournament.bracketIniciado && editingTournament.status !== "finalizado" && (
+              <div className="et-warn-banner">
+                🔒 Este torneo tiene un bracket activo. Solo el administrador puede editarlo.
+              </div>
+            )}
+
+            <form onSubmit={handleEditSubmit} className="et-form">
+              <div className="et-form-group">
+                <label>Nombre del Torneo</label>
+                <input name="name" value={editForm.name ?? ""} onChange={handleEditChange} required />
+              </div>
+              <div className="et-form-row">
+                <div className="et-form-group">
+                  <label>Juego</label>
+                  <select name="gameId" value={editForm.gameId ?? ""} onChange={handleEditChange}>
+                    {games.map(g => <option key={g.id} value={g.id}>{g.nombre_juego}</option>)}
+                  </select>
+                </div>
+                <div className="et-form-group">
+                  <label>Estado</label>
+                  <select name="status" value={editForm.status ?? "abierto"} onChange={handleEditChange}>
+                    {["abierto", "en curso", "finalizado"].map(s =>
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+              <div className="et-form-row">
+                <div className="et-form-group">
+                  <label>Fecha Inicio</label>
+                  <input type="date" name="startDate" value={editForm.startDate ?? ""} onChange={handleEditChange} />
+                </div>
+                <div className="et-form-group">
+                  <label>Fecha Fin</label>
+                  <input type="date" name="endDate" value={editForm.endDate ?? ""} onChange={handleEditChange} />
+                </div>
+              </div>
+              <div className="et-form-row">
+                <div className="et-form-group">
+                  <label>Máx. Participantes</label>
+                  <input type="number" name="players" value={editForm.players ?? ""} onChange={handleEditChange} min={2} />
+                </div>
+                <div className="et-form-group">
+                  <label>Premio</label>
+                  <input name="prize" value={editForm.prize ?? ""} onChange={handleEditChange} />
+                </div>
+              </div>
+              <div className="et-form-group">
+                <label>Descripción</label>
+                <textarea name="description" value={editForm.description ?? ""} onChange={handleEditChange} rows={3} />
+              </div>
+              <div className="et-form-group">
+                <label>Reglas</label>
+                <textarea name="rules" value={editForm.rules ?? ""} onChange={handleEditChange} rows={3} />
+              </div>
+              <div className="et-modal-actions">
+                <button type="button" className="et-btn-cancel" onClick={() => setEditingTournament(null)}>Cancelar</button>
+                <button type="submit" className="et-btn-save" disabled={saving}>
+                  {saving ? "Guardando..." : "💾 Guardar Cambios"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </section>
+      )}
+
+      {/* ── Modal: Confirmar Eliminación ──────────────────────── */}
+      {deleteConfirm && (
+        <div className="et-modal-overlay" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); }}>
+          <div className="et-modal et-modal-confirm" onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: "3rem", marginBottom: 8 }}>🗑️</div>
+            <h2 style={{ color: "#f87171", marginBottom: 8 }}>¿Eliminar torneo?</h2>
+            <p style={{ color: "#94a3b8", marginBottom: 16, fontSize: "0.95rem" }}>
+              El torneo <strong style={{ color: "#e2e8f0" }}>"{deleteConfirm.name}"</strong> será marcado como eliminado.
+              {isAdmin ? " (Eliminación lógica)" : " Esta acción no se puede deshacer fácilmente."}
+            </p>
+
+            <div className="et-form-group" style={{ textAlign: "left", marginBottom: 20 }}>
+              <label style={{ color: "#94a3b8", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: 6 }}>
+                Motivo <span style={{ color: "#475569", fontWeight: 400 }}>(opcional)</span>
+              </label>
+              <textarea
+                value={deleteMotivo}
+                onChange={e => setDeleteMotivo(e.target.value)}
+                placeholder="Ej: Torneo duplicado, sin participantes..."
+                rows={3}
+                style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, color: "#e2e8f0", padding: "10px 14px", fontSize: "0.88rem", fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div className="et-modal-actions">
+              <button className="et-btn-cancel" onClick={() => { setDeleteConfirm(null); setDeleteMotivo(""); }}>✕ Cancelar</button>
+              <button className="et-btn-delete" onClick={handleDelete} disabled={deleting} style={{ background: "#dc2626" }}>
+                {deleting ? "Eliminando..." : "🗑️ Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
-};
-
-export default EditTournament;
+}

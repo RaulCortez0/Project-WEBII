@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "react-toastify";
 import "./AllTournaments.css"; // Reutilizamos estilos
 
 const API_URL = "http://localhost:3001";
@@ -34,7 +35,7 @@ const TournamentDetail = () => {
 
   const handleRegister = async () => {
     if (!isLoggedIn) {
-      alert("Debes iniciar sesión para inscribirte");
+      toast.warn("Debes iniciar sesión para inscribirte");
       navigate("/login");
       return;
     }
@@ -52,14 +53,13 @@ const TournamentDetail = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "Error al inscribirse");
+        toast.error(data.error || "Error al inscribirse");
         return;
       }
-
-      alert("¡Inscripción exitosa!");
-      fetchTournament(); // Recargar para actualizar contadores
-    } catch (err) {
-      alert("Error al conectar con el servidor");
+      toast.success("\u00a1Inscripci\u00f3n exitosa!");
+      fetchTournament();
+    } catch {
+      toast.error("Error al conectar con el servidor");
     }
   };
 
@@ -81,8 +81,12 @@ const TournamentDetail = () => {
     const isDateExpired = currentDate > endDate;
     const isFull = tournament.registeredPlayers >= tournament.players;
 
-    if (isDateExpired) {
+    if (tournament.status === 'finalizado') {
       return { message: "Torneo finalizado", className: "status-closed", available: false };
+    } else if (tournament.status === 'en curso' || tournament.bracketIniciado) {
+      return { message: "Torneo en curso", className: "status-closed", available: false };
+    } else if (isDateExpired) {
+      return { message: "Torneo finalizado por fecha", className: "status-closed", available: false };
     } else if (isFull) {
       return { message: "Torneo cerrado - Cupo lleno", className: "status-full", available: false };
     } else {
@@ -127,6 +131,32 @@ const TournamentDetail = () => {
           <p>{tournament.game}</p>
         </div>
       </section>
+
+      {/* Champion banner */}
+      {tournament.status === "finalizado" && tournament.ganadorNombre && (
+        <div style={{
+          background: "linear-gradient(135deg, #1a0a33, #0d1b4b)",
+          borderBottom: "1px solid rgba(139,92,246,0.3)",
+          padding: "24px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8
+        }}>
+          <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "2px", color: "#a78bfa", textTransform: "uppercase" }}>
+            ✅ Torneo Finalizado
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: "2rem" }}>🏆</span>
+            <div>
+              <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Campeón del Torneo</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#e2e8f0" }}>{tournament.ganadorNombre}</div>
+            </div>
+            <span style={{ fontSize: "2rem" }}>🏆</span>
+          </div>
+        </div>
+      )}
 
       <section className="tournaments-results">
         <div className={`tournament-item ${statusInfo.className}`} style={{ maxWidth: "900px", margin: "0 auto" }}>

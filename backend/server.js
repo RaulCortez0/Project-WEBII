@@ -277,10 +277,12 @@ app.get("/torneos", async (req, res) => {
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
         t.creado_por as createdBy, t.premio as prize, t.reglas as rules,
+        t.bracket_iniciado as bracketIniciado,
         COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
+      WHERE t.estado != 'eliminado'
       GROUP BY t.id ORDER BY t.fecha_inicio DESC
     `, { type: QueryTypes.SELECT });
     logger.info(`GET /torneos — Retornando ${results.length} torneos`);
@@ -300,7 +302,7 @@ app.get("/torneos/usuario/:userId", async (req, res) => {
         t.fecha_inicio as startDate, t.fecha_fin as endDate,
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
-        t.premio as prize, t.reglas as rules,
+        t.premio as prize, t.reglas as rules, t.bracket_iniciado as bracketIniciado,
         COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
@@ -326,10 +328,12 @@ app.get("/torneos/:id", async (req, res) => {
         t.descripcion as description, t.formato as type,
         t.creado_por as createdBy, t.premio as prize, t.reglas as rules,
         t.juego_id as gameId, t.bracket_iniciado as bracketIniciado,
+        ug.username as ganadorNombre, t.ganador_id as ganadorId,
         COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
+      LEFT JOIN Usuarios ug ON t.ganador_id = ug.id
       WHERE t.id = :id GROUP BY t.id
     `, { replacements: { id }, type: QueryTypes.SELECT });
 
@@ -370,13 +374,17 @@ app.post("/torneos", async (req, res) => {
 
 app.put("/torneos/:id", async (req, res) => {
   const { id } = req.params;
-  const { nombre, juego_id, fecha_inicio, fecha_fin, max_participantes, descripcion, estado, formato, premio, reglas, creado_por } = req.body;
+  const { nombre, juego_id, fecha_inicio, fecha_fin, max_participantes, descripcion, estado, formato, premio, reglas, creado_por, isAdmin } = req.body;
   logger.info(`PUT /torneos/${id} — Actualizar torneo`);
 
   try {
-    const [check] = await sequelize.query("SELECT creado_por FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
+    const [check] = await sequelize.query("SELECT creado_por, bracket_iniciado, estado FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
     if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
-    if (check.creado_por !== creado_por) return res.status(403).json({ error: "No tienes permiso para editar este torneo" });
+    if (!isAdmin && check.creado_por !== creado_por) return res.status(403).json({ error: "No tienes permiso para editar este torneo" });
+    // Only block users; admins can edit anytime
+    if (!isAdmin && check.bracket_iniciado && check.estado !== 'finalizado') {
+      return res.status(400).json({ error: "No puedes modificar un torneo en curso hasta que haya finalizado" });
+    }
 
     await sequelize.query(`
       UPDATE Torneos SET nombre=:nombre, juego_id=:juego_id, fecha_inicio=:fecha_inicio,
@@ -394,20 +402,77 @@ app.put("/torneos/:id", async (req, res) => {
 
 app.delete("/torneos/:id", async (req, res) => {
   const { id } = req.params;
-  const { creado_por } = req.body;
-  logger.info(`DELETE /torneos/${id} — Solicitud de eliminación`);
+  const { creado_por, motivo, isAdmin } = req.body;
+  logger.info(`DELETE /torneos/${id} — Solicitud de eliminación lógica`);
 
   try {
-    const [check] = await sequelize.query("SELECT creado_por FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
+    const [check] = await sequelize.query("SELECT creado_por, bracket_iniciado, estado FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
     if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
-    if (check.creado_por !== creado_por) return res.status(403).json({ error: "No tienes permiso para eliminar este torneo" });
+    if (!isAdmin && check.creado_por !== creado_por) return res.status(403).json({ error: "No tienes permiso para eliminar este torneo" });
+    // Only block users; admins can delete anytime
+    if (!isAdmin && check.bracket_iniciado && check.estado !== 'finalizado') {
+      return res.status(400).json({ error: "No puedes eliminar un torneo en curso hasta que haya finalizado" });
+    }
 
-    await sequelize.query("DELETE FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.DELETE });
-    logger.info(`DELETE /torneos/${id} — Torneo eliminado`);
-    res.json({ message: "Torneo eliminado exitosamente" });
+    // Logical delete for regular users; admin may also use this for logical delete
+    await sequelize.query(
+      "UPDATE Torneos SET estado = 'eliminado', motivo_eliminacion = :motivo WHERE id = :id",
+      { replacements: { id, motivo: motivo || null }, type: QueryTypes.UPDATE }
+    );
+    logger.info(`DELETE /torneos/${id} — Torneo eliminado lógicamente`);
+    res.json({ message: "Torneo eliminado" });
   } catch (error) {
     logger.error(`DELETE /torneos/${id} — Error:`, error);
     res.status(500).json({ error: "Error al eliminar el torneo" });
+  }
+});
+
+app.put("/torneos/:id/finalizar", async (req, res) => {
+  const { id } = req.params;
+  const { usuario_id, role } = req.body;
+  logger.info(`PUT /torneos/${id}/finalizar — Finalizar torneo manualmente`);
+
+  try {
+    const [check] = await sequelize.query("SELECT creado_por, estado FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
+    if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
+
+    if (check.creado_por !== parseInt(usuario_id) && role !== 'admin') {
+      return res.status(403).json({ error: "No tienes permiso para finalizar este torneo" });
+    }
+    if (check.estado === 'finalizado') {
+      return res.status(400).json({ error: "El torneo ya está finalizado" });
+    }
+
+    // Find the champion: the winner of the last confirmed match (highest round, pos 0)
+    const [champion] = await sequelize.query(`
+      SELECT p.ganador_id, u.username as ganador_nombre
+      FROM Partidas p
+      LEFT JOIN Usuarios u ON p.ganador_id = u.id
+      WHERE p.torneo_id = :id AND p.estado = 'confirmado' AND p.es_bye = 0
+      ORDER BY p.ronda DESC, p.bracket_pos ASC
+      LIMIT 1
+    `, { replacements: { id }, type: QueryTypes.SELECT });
+
+    // Also try bye-champion (bracket of 1 confirmed match at highest round)
+    const [byeChamp] = !champion?.ganador_id ? await sequelize.query(`
+      SELECT p.ganador_id, u.username as ganador_nombre
+      FROM Partidas p
+      LEFT JOIN Usuarios u ON p.ganador_id = u.id
+      WHERE p.torneo_id = :id AND p.estado = 'confirmado'
+      ORDER BY p.ronda DESC LIMIT 1
+    `, { replacements: { id }, type: QueryTypes.SELECT }) : [null];
+
+    const finalChampion = champion?.ganador_id ? champion : byeChamp;
+
+    await sequelize.query(
+      "UPDATE Torneos SET estado = 'finalizado', ganador_id = :gid WHERE id = :id",
+      { replacements: { id, gid: finalChampion?.ganador_id || null }, type: QueryTypes.UPDATE }
+    );
+    logger.info(`PUT /torneos/${id}/finalizar — Torneo finalizado. Campeón: ${finalChampion?.ganador_nombre}`);
+    res.json({ message: "Torneo finalizado exitosamente", champion: finalChampion || null });
+  } catch (error) {
+    logger.error(`PUT /torneos/${id}/finalizar — Error:`, error);
+    res.status(500).json({ error: "Error al finalizar el torneo" });
   }
 });
 
@@ -442,11 +507,12 @@ app.get("/admin/reportes/ranking-jugadores", async (req, res) => {
   try {
     const results = await sequelize.query(`
       SELECT u.id, u.username, u.email, u.role,
-        COUNT(p.id) as victorias,
+        COUNT(DISTINCT CASE WHEN p.ganador_id = u.id AND p.es_bye = 0 AND p.estado = 'confirmado' THEN p.id END) as victorias,
         COUNT(DISTINCT i.torneo_id) as torneos_participados
       FROM Usuarios u
-      LEFT JOIN Partidas p ON u.id = p.ganador_id
+      LEFT JOIN Partidas p ON (u.id = p.jugador1_id OR u.id = p.jugador2_id)
       LEFT JOIN Inscripciones i ON u.id = i.usuario_id AND i.estatus_aprobacion = 'aprobado'
+      WHERE EXISTS (SELECT 1 FROM Inscripciones ins WHERE ins.usuario_id = u.id AND ins.estatus_aprobacion = 'aprobado')
       GROUP BY u.id, u.username, u.email, u.role
       ORDER BY victorias DESC, torneos_participados DESC
     `, { type: QueryTypes.SELECT });
@@ -469,7 +535,6 @@ app.get("/admin/reportes/ocupacion-torneos", async (req, res) => {
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
-      WHERE t.estado != 'eliminado'
       GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.max_participantes
       ORDER BY porcentaje_llenado DESC
     `, { type: QueryTypes.SELECT });
@@ -497,9 +562,8 @@ app.get("/admin/reportes/disponibilidad-cupos", async (req, res) => {
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
-      WHERE t.estado != 'eliminado'
+      WHERE t.estado IN ('abierto', 'en curso')
       GROUP BY t.id, t.nombre, v.nombre_juego, t.estado, t.max_participantes
-      HAVING cupos_disponibles > 0
       ORDER BY cupos_disponibles ASC
     `, { type: QueryTypes.SELECT });
     res.json(results.map(r => ({
@@ -514,6 +578,58 @@ app.get("/admin/reportes/disponibilidad-cupos", async (req, res) => {
   }
 });
 
+// ── Reporte 5: Campeones ────────────────────────────────────────────────────
+app.get("/admin/reportes/campeones", async (req, res) => {
+  logger.info("GET /admin/reportes/campeones");
+  try {
+    const results = await sequelize.query(`
+      SELECT
+        u.id,
+        u.username,
+        u.email,
+        -- Torneos ganados: torneos donde este usuario es el ganador_id registrado
+        COUNT(DISTINCT t_ganados.id) AS torneos_ganados,
+        -- Partidas jugadas (como jugador1 o jugador2, no byes, confirmadas)
+        COUNT(DISTINCT CASE WHEN (p.jugador1_id = u.id OR p.jugador2_id = u.id)
+          AND p.es_bye = 0 AND p.estado = 'confirmado' THEN p.id END) AS partidas_jugadas,
+        -- Partidas ganadas
+        COUNT(DISTINCT CASE WHEN p.ganador_id = u.id AND p.es_bye = 0
+          AND p.estado = 'confirmado' THEN p.id END) AS partidas_ganadas,
+        -- Partidas perdidas
+        COUNT(DISTINCT CASE WHEN (p.jugador1_id = u.id OR p.jugador2_id = u.id)
+          AND p.ganador_id IS NOT NULL AND p.ganador_id != u.id
+          AND p.es_bye = 0 AND p.estado = 'confirmado' THEN p.id END) AS partidas_perdidas
+      FROM Usuarios u
+      LEFT JOIN Torneos t_ganados ON t_ganados.ganador_id = u.id AND t_ganados.estado = 'finalizado'
+      LEFT JOIN Partidas p ON (p.jugador1_id = u.id OR p.jugador2_id = u.id)
+      WHERE EXISTS (
+        SELECT 1 FROM Inscripciones ins
+        WHERE ins.usuario_id = u.id AND ins.estatus_aprobacion = 'aprobado'
+      )
+      GROUP BY u.id, u.username, u.email
+      HAVING partidas_jugadas > 0 OR torneos_ganados > 0
+      ORDER BY torneos_ganados DESC, partidas_ganadas DESC
+    `, { type: QueryTypes.SELECT });
+    res.json(results.map(r => {
+      const jugadas = parseInt(r.partidas_jugadas) || 0;
+      const ganadas = parseInt(r.partidas_ganadas) || 0;
+      const perdidas = parseInt(r.partidas_perdidas) || 0;
+      return {
+        ...r,
+        torneos_ganados: parseInt(r.torneos_ganados) || 0,
+        partidas_jugadas: jugadas,
+        partidas_ganadas: ganadas,
+        partidas_perdidas: perdidas,
+        pct_victorias: jugadas > 0 ? Math.round((ganadas / jugadas) * 100) : 0,
+        pct_derrotas: jugadas > 0 ? Math.round((perdidas / jugadas) * 100) : 0,
+      };
+    }));
+  } catch (error) {
+    logger.error("Reporte campeones — Error:", error);
+    res.status(500).json({ error: "Error al generar reporte" });
+  }
+});
+
 // ── Admin: Editar cualquier torneo ───────────────────────────────────────────
 app.put("/admin/torneos/:id", async (req, res) => {
   const { id } = req.params;
@@ -522,6 +638,7 @@ app.put("/admin/torneos/:id", async (req, res) => {
   try {
     const [check] = await sequelize.query("SELECT id FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
     if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
+    // Admin can edit any tournament regardless of bracket status
 
     await sequelize.query(`
       UPDATE Torneos SET nombre=:nombre, juego_id=:juego_id, fecha_inicio=:fecha_inicio,
@@ -538,22 +655,45 @@ app.put("/admin/torneos/:id", async (req, res) => {
 });
 
 // ── Admin: Eliminación lógica de torneo (con motivo) ────────────────────────
-app.delete("/admin/torneos/:id", async (req, res) => {
+app.delete("/admin/torneos/:id/logico", async (req, res) => {
   const { id } = req.params;
   const { motivo } = req.body;
-  logger.info(`DELETE /admin/torneos/${id} — Eliminación lógica`);
+  logger.info(`DELETE /admin/torneos/${id}/logico — Eliminación lógica`);
   try {
-    const [check] = await sequelize.query("SELECT id FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
+    const [check] = await sequelize.query("SELECT id, bracket_iniciado, estado FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
     if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
-
+    if (check.bracket_iniciado && check.estado !== 'finalizado') {
+      return res.status(400).json({ error: "No puedes eliminar un torneo en curso hasta que haya finalizado" });
+    }
     await sequelize.query(
       "UPDATE Torneos SET estado = 'eliminado', motivo_eliminacion = :motivo WHERE id = :id",
       { replacements: { id, motivo: motivo || null }, type: QueryTypes.UPDATE }
     );
-    logger.info(`DELETE /admin/torneos/${id} — Torneo eliminado. Motivo: ${motivo}`);
+    logger.info(`DELETE /admin/torneos/${id}/logico — Torneo eliminado lógicamente. Motivo: ${motivo}`);
     res.json({ message: "Torneo eliminado lógicamente" });
   } catch (error) {
-    logger.error(`DELETE /admin/torneos/${id} — Error:`, error);
+    logger.error(`DELETE /admin/torneos/${id}/logico — Error:`, error);
+    res.status(500).json({ error: "Error al eliminar el torneo" });
+  }
+});
+
+// ── Admin: Eliminación real (física) de torneo ────────────────────────────────────────────
+app.delete("/admin/torneos/:id/real", async (req, res) => {
+  const { id } = req.params;
+  logger.info(`DELETE /admin/torneos/${id}/real — Eliminación física`);
+  try {
+    const [check] = await sequelize.query("SELECT id, bracket_iniciado, estado FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT });
+    if (!check) return res.status(404).json({ error: "Torneo no encontrado" });
+    if (check.bracket_iniciado && check.estado !== 'finalizado') {
+      return res.status(400).json({ error: "No puedes eliminar un torneo en curso hasta que haya finalizado" });
+    }
+    await sequelize.query("DELETE FROM Partidas WHERE torneo_id = :id", { replacements: { id }, type: QueryTypes.DELETE });
+    await sequelize.query("DELETE FROM Inscripciones WHERE torneo_id = :id", { replacements: { id }, type: QueryTypes.DELETE });
+    await sequelize.query("DELETE FROM Torneos WHERE id = :id", { replacements: { id }, type: QueryTypes.DELETE });
+    logger.info(`DELETE /admin/torneos/${id}/real — Torneo eliminado físicamente`);
+    res.json({ message: "Torneo eliminado permanentemente" });
+  } catch (error) {
+    logger.error(`DELETE /admin/torneos/${id}/real — Error:`, error);
     res.status(500).json({ error: "Error al eliminar el torneo" });
   }
 });
@@ -568,7 +708,7 @@ app.get("/admin/torneos", async (req, res) => {
         t.max_participantes as players, t.estado as status,
         t.descripcion as description, t.formato as type,
         t.creado_por as createdBy, t.premio as prize, t.reglas as rules,
-        t.juego_id as gameId, COUNT(i.id) as registeredPlayers
+        t.juego_id as gameId, t.bracket_iniciado as bracketIniciado, COUNT(i.id) as registeredPlayers
       FROM Torneos t
       LEFT JOIN Videojuegos v ON t.juego_id = v.id
       LEFT JOIN Inscripciones i ON t.id = i.torneo_id AND i.estatus_aprobacion = 'aprobado'
@@ -605,18 +745,47 @@ async function advanceWinner(torneo_id, ronda, bracket_pos, ganador_id) {
     const j1 = is_j1_slot ? ganador_id : existing.jugador1_id;
     const j2 = is_j1_slot ? existing.jugador2_id : ganador_id;
     if (j1 && j2) {
+      // Both players present → match is ready
       await sequelize.query(
         "UPDATE Partidas SET estado = 'pendiente' WHERE id = :id",
         { replacements: { id: existing.id }, type: QueryTypes.UPDATE }
       );
+    } else {
+      // Only one player in existing match → auto-advance as bye
+      const soloPlayer = j1 || j2;
+      await sequelize.query(
+        "UPDATE Partidas SET ganador_id = :g, estado = 'confirmado', es_bye = 1 WHERE id = :id",
+        { replacements: { g: soloPlayer, id: existing.id }, type: QueryTypes.UPDATE }
+      );
+      await advanceWinner(torneo_id, next_ronda, next_pos, soloPlayer);
     }
   } else {
     const j1 = is_j1_slot ? ganador_id : null;
     const j2 = is_j1_slot ? null : ganador_id;
-    await sequelize.query(
-      "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, es_bye) VALUES (:torneo_id, :j1, :j2, :ronda, :pos, 'esperando', 0)",
-      { replacements: { torneo_id, j1, j2, ronda: next_ronda, pos: next_pos }, type: QueryTypes.INSERT }
+
+    // Check if the sibling feeder match at CURRENT ronda exists.
+    // Sibling feeds the OTHER slot of next_pos. If it doesn't exist,
+    // no opponent will ever arrive → this player is the champion.
+    const sibling_bracket_pos = bracket_pos % 2 === 0 ? bracket_pos + 1 : bracket_pos - 1;
+    const [siblingMatch] = await sequelize.query(
+      "SELECT id FROM Partidas WHERE torneo_id = :torneo_id AND ronda = :ronda AND bracket_pos = :pos",
+      { replacements: { torneo_id, ronda, pos: sibling_bracket_pos }, type: QueryTypes.SELECT }
     );
+
+    if (!siblingMatch) {
+      // No sibling feeder → solo player is the champion → auto-confirm
+      logger.info(`advanceWinner: no sibling at ronda ${ronda} pos ${sibling_bracket_pos} — ${ganador_id} es campeón`);
+      await sequelize.query(
+        "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, ganador_id, es_bye) VALUES (:torneo_id, :j1, :j2, :ronda, :pos, 'confirmado', :ganador, 1)",
+        { replacements: { torneo_id, j1, j2, ronda: next_ronda, pos: next_pos, ganador: ganador_id }, type: QueryTypes.INSERT }
+      );
+    } else {
+      // Sibling exists → opponent will arrive later → create waiting slot
+      await sequelize.query(
+        "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, es_bye) VALUES (:torneo_id, :j1, :j2, :ronda, :pos, 'esperando', 0)",
+        { replacements: { torneo_id, j1, j2, ronda: next_ronda, pos: next_pos }, type: QueryTypes.INSERT }
+      );
+    }
   }
 }
 
@@ -649,32 +818,34 @@ app.post("/torneos/:id/bracket/generar", async (req, res) => {
     const slots = [...players, ...Array(nextPow2 - players.length).fill(null)];
     const r1Matches = nextPow2 / 2;
 
+    // Pass 1: insert ALL round-1 matches first (so siblings exist in DB)
+    const byesToProcess = [];
     for (let pos = 0; pos < r1Matches; pos++) {
       const j1 = slots[pos * 2];
       const j2 = slots[pos * 2 + 1];
-
-      if (j1 === null && j2 === null) continue; // skip empty slots
-
+      if (j1 === null && j2 === null) continue;
       if (j2 === null) {
-        // bye: j1 auto-advances
-        const [byeId] = await sequelize.query(
+        await sequelize.query(
           "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, ganador_id, es_bye) VALUES (:t, :j1, NULL, 1, :pos, 'confirmado', :j1, 1)",
           { replacements: { t: id, j1, pos }, type: QueryTypes.INSERT }
         );
-        await advanceWinner(id, 1, pos, j1);
+        byesToProcess.push({ pos, winner: j1 });
       } else if (j1 === null) {
-        // bye: j2 auto-advances
         await sequelize.query(
           "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, ganador_id, es_bye) VALUES (:t, NULL, :j2, 1, :pos, 'confirmado', :j2, 1)",
           { replacements: { t: id, j2, pos }, type: QueryTypes.INSERT }
         );
-        await advanceWinner(id, 1, pos, j2);
+        byesToProcess.push({ pos, winner: j2 });
       } else {
         await sequelize.query(
           "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, es_bye) VALUES (:t, :j1, :j2, 1, :pos, 'pendiente', 0)",
           { replacements: { t: id, j1, j2, pos }, type: QueryTypes.INSERT }
         );
       }
+    }
+    // Pass 2: now advance BYE winners (sibling matches already exist in DB)
+    for (const bye of byesToProcess) {
+      await advanceWinner(id, 1, bye.pos, bye.winner);
     }
 
     await sequelize.query(
@@ -687,6 +858,97 @@ app.post("/torneos/:id/bracket/generar", async (req, res) => {
   } catch (error) {
     logger.error(`POST /torneos/${id}/bracket/generar — Error:`, error);
     res.status(500).json({ error: "Error al generar el bracket" });
+  }
+});
+
+// ── Resetear y regenerar bracket ─────────────────────────────────────────────
+app.post("/torneos/:id/bracket/reset", async (req, res) => {
+  const { id } = req.params;
+  const { usuario_id } = req.body;
+  logger.info(`POST /torneos/${id}/bracket/reset — Solicitud de reset`);
+  try {
+    const [torneo] = await sequelize.query(
+      "SELECT id, creado_por, bracket_iniciado, estado FROM Torneos WHERE id = :id",
+      { replacements: { id }, type: QueryTypes.SELECT }
+    );
+    if (!torneo) return res.status(404).json({ error: "Torneo no encontrado" });
+    if (torneo.estado === "finalizado") return res.status(400).json({ error: "No puedes reiniciar un torneo ya finalizado" });
+
+    // Verificar permisos: solo el creador o admin
+    const [decider] = await sequelize.query(
+      "SELECT role FROM Usuarios WHERE id = :id",
+      { replacements: { id: usuario_id }, type: QueryTypes.SELECT }
+    );
+    const isOrganizer = torneo.creado_por === parseInt(usuario_id);
+    const isAdmin = decider?.role === "admin";
+    if (!isOrganizer && !isAdmin) return res.status(403).json({ error: "Sin permisos para reiniciar el bracket" });
+
+    // Eliminar todas las partidas existentes del torneo
+    await sequelize.query("DELETE FROM Partidas WHERE torneo_id = :id", { replacements: { id }, type: QueryTypes.DELETE });
+
+    // Resetear estado del torneo
+    await sequelize.query(
+      "UPDATE Torneos SET bracket_iniciado = 0, estado = 'en curso' WHERE id = :id",
+      { replacements: { id }, type: QueryTypes.UPDATE }
+    );
+
+    // Re-obtener inscritos y generar nuevo bracket
+    const inscritos = await sequelize.query(
+      "SELECT usuario_id FROM Inscripciones WHERE torneo_id = :id AND estatus_aprobacion = 'aprobado' ORDER BY fecha_inscripcion ASC",
+      { replacements: { id }, type: QueryTypes.SELECT }
+    );
+    if (inscritos.length < 2) return res.status(400).json({ error: "Se necesitan al menos 2 jugadores inscritos" });
+
+    const players = inscritos.map(i => i.usuario_id);
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+
+    const nextPow2 = Math.pow(2, Math.ceil(Math.log2(Math.max(players.length, 2))));
+    const slots = [...players, ...Array(nextPow2 - players.length).fill(null)];
+    const r1Matches = nextPow2 / 2;
+
+    // Pass 1: insert ALL round-1 matches first (so siblings exist in DB)
+    const byesToProcess2 = [];
+    for (let pos = 0; pos < r1Matches; pos++) {
+      const j1 = slots[pos * 2];
+      const j2 = slots[pos * 2 + 1];
+      if (j1 === null && j2 === null) continue;
+      if (j2 === null) {
+        await sequelize.query(
+          "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, ganador_id, es_bye) VALUES (:t, :j1, NULL, 1, :pos, 'confirmado', :j1, 1)",
+          { replacements: { t: id, j1, pos }, type: QueryTypes.INSERT }
+        );
+        byesToProcess2.push({ pos, winner: j1 });
+      } else if (j1 === null) {
+        await sequelize.query(
+          "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, ganador_id, es_bye) VALUES (:t, NULL, :j2, 1, :pos, 'confirmado', :j2, 1)",
+          { replacements: { t: id, j2, pos }, type: QueryTypes.INSERT }
+        );
+        byesToProcess2.push({ pos, winner: j2 });
+      } else {
+        await sequelize.query(
+          "INSERT INTO Partidas (torneo_id, jugador1_id, jugador2_id, ronda, bracket_pos, estado, es_bye) VALUES (:t, :j1, :j2, 1, :pos, 'pendiente', 0)",
+          { replacements: { t: id, j1, j2, pos }, type: QueryTypes.INSERT }
+        );
+      }
+    }
+    // Pass 2: advance BYE winners (sibling matches already exist in DB)
+    for (const bye of byesToProcess2) {
+      await advanceWinner(id, 1, bye.pos, bye.winner);
+    }
+
+    await sequelize.query(
+      "UPDATE Torneos SET bracket_iniciado = 1, estado = 'en curso' WHERE id = :id",
+      { replacements: { id }, type: QueryTypes.UPDATE }
+    );
+    const totalRounds = Math.log2(nextPow2);
+    logger.info(`Bracket reseteado y regenerado: ${players.length} jugadores, ${totalRounds} rondas`);
+    res.json({ message: "Bracket reiniciado y regenerado", totalRounds, players: players.length });
+  } catch (error) {
+    logger.error(`POST /torneos/${id}/bracket/reset — Error:`, error);
+    res.status(500).json({ error: "Error al reiniciar el bracket" });
   }
 });
 
@@ -709,7 +971,7 @@ app.get("/torneos/:id/bracket", async (req, res) => {
     `, { replacements: { id }, type: QueryTypes.SELECT });
 
     const [torneo] = await sequelize.query(
-      "SELECT id, nombre, creado_por, bracket_iniciado, max_participantes FROM Torneos WHERE id = :id",
+      "SELECT id, nombre, creado_por, bracket_iniciado, max_participantes, estado FROM Torneos WHERE id = :id",
       { replacements: { id }, type: QueryTypes.SELECT }
     );
     res.json({ torneo, matches });
@@ -910,6 +1172,13 @@ app.use((err, req, res, next) => {
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   logger.info(`Servidor iniciado y corriendo en puerto ${PORT}`);
+  // Safe migration: add ganador_id to Torneos if missing
+  try {
+    await sequelize.query("ALTER TABLE Torneos ADD COLUMN ganador_id INT DEFAULT NULL", { type: QueryTypes.RAW });
+    logger.info("Migración: columna ganador_id añadida a Torneos");
+  } catch (e) {
+    if (!e.message?.includes("Duplicate column")) logger.warn("Migración ganador_id: " + e.message);
+  }
 });

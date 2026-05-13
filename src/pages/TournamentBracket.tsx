@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "react-toastify";
 import "./TournamentBracket.css";
 
 const API_URL = "http://localhost:3001";
@@ -30,6 +31,7 @@ interface TorneoInfo {
   creado_por: number;
   bracket_iniciado: number;
   max_participantes: number;
+  estado: string;
 }
 
 const roundNames = (total: number, ronda: number): string => {
@@ -49,13 +51,10 @@ const TournamentBracket = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [decidingMatch, setDecidingMatch] = useState<Match | null>(null);
-
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
 
   const fetchBracket = async () => {
     setLoading(true);
@@ -66,7 +65,7 @@ const TournamentBracket = () => {
       setTorneo(data.torneo);
       setMatches(data.matches);
     } catch {
-      showToast("Error al cargar el bracket", "error");
+      toast.error("Error al cargar el bracket");
     } finally {
       setLoading(false);
     }
@@ -85,28 +84,32 @@ const TournamentBracket = () => {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      showToast(`✅ Bracket generado: ${data.players} jugadores, ${data.totalRounds} rondas`);
+      toast.success(`✅ Bracket generado: ${data.players} jugadores, ${data.totalRounds} rondas`);
       fetchBracket();
     } catch (err: any) {
-      showToast(err.message ?? "Error al generar", "error");
+      toast.error(err.message ?? "Error al generar");
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleReport = async (match: Match, ganador_id: number) => {
+  const handleReset = async () => {
+    setShowResetConfirm(false);
+    setGenerating(true);
     try {
-      const r = await fetch(`${API_URL}/partidas/${match.id}/reportar`, {
-        method: "PUT",
+      const r = await fetch(`${API_URL}/torneos/${id}/bracket/reset`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usuario_id: user?.id, ganador_id }),
+        body: JSON.stringify({ usuario_id: user?.id }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      showToast(data.message);
+      toast.success(`🔄 Bracket reiniciado: ${data.players} jugadores, ${data.totalRounds} rondas`);
       fetchBracket();
     } catch (err: any) {
-      showToast(err.message ?? "Error al reportar", "error");
+      toast.error(err.message ?? "Error al reiniciar bracket");
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -119,11 +122,35 @@ const TournamentBracket = () => {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      showToast("Ganador asignado correctamente");
+      toast.success("Ganador asignado correctamente");
       setDecidingMatch(null);
       fetchBracket();
     } catch (err: any) {
-      showToast(err.message ?? "Error al decidir", "error");
+      toast.error(err.message ?? "Error al decidir");
+    }
+  };
+
+  const handleFinalizarTorneo = async () => {
+    setShowFinalizeConfirm(false);
+    setFinalizing(true);
+    try {
+      const r = await fetch(`${API_URL}/torneos/${id}/finalizar`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario_id: user?.id, role: user?.role }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      if (data.champion?.ganador_nombre) {
+        toast.success(`🏆 Torneo finalizado! Campeón: ${data.champion.ganador_nombre}`);
+      } else {
+        toast.success("🏁 Torneo finalizado exitosamente");
+      }
+      fetchBracket();
+    } catch (err: any) {
+      toast.error(err.message ?? "Error al finalizar el torneo");
+    } finally {
+      setFinalizing(false);
     }
   };
 
@@ -135,95 +162,54 @@ const TournamentBracket = () => {
   const roundNumbers = Object.keys(rounds).map(Number).sort((a, b) => a - b);
   const totalRounds = roundNumbers.length;
 
-  // Detectar campeón: único match de la ronda final confirmado
+  // Detectar campeón: único match de la ronda final confirmado con ganador
   const finalRound = roundNumbers[roundNumbers.length - 1];
   const finalMatches = rounds[finalRound] || [];
-  const champion = finalMatches.length === 1 && finalMatches[0].estado === "confirmado"
-    ? { nombre: finalMatches[0].ganador_nombre, id: finalMatches[0].ganador_id }
-    : null;
+  const champion =
+    finalMatches.length === 1 && finalMatches[0].estado === "confirmado" && finalMatches[0].ganador_id
+      ? { nombre: finalMatches[0].ganador_nombre, id: finalMatches[0].ganador_id }
+      : null;
 
   const isOrganizer = user?.id === torneo?.creado_por;
   const isAdmin = user?.role === "admin";
-  const canGenerate = isLoggedIn && (isOrganizer || isAdmin) && !torneo?.bracket_iniciado;
-
-  const myId = user?.id;
+  const canDecide = isLoggedIn && (isOrganizer || isAdmin);
+  const canGenerate = canDecide && !torneo?.bracket_iniciado;
 
   const renderPlayer = (match: Match, slot: 1 | 2) => {
     const playerId = slot === 1 ? match.jugador1_id : match.jugador2_id;
     const playerName = slot === 1 ? match.jugador1_nombre : match.jugador2_nombre;
     const isWinner = match.ganador_id === playerId;
     const isLoser = match.ganador_id !== null && match.ganador_id !== playerId;
-    const myReport = slot === 1 ? match.reporte_j1 : match.reporte_j2;
-    const isMe = playerId === myId;
+    const isMe = playerId === user?.id;
 
-    if (!playerId && match.es_bye) {
-      return <div className="bp-player bp-bye"><span>BYE</span></div>;
-    }
-    if (!playerId) {
-      return <div className="bp-player bp-tbd"><span>Por definir</span></div>;
-    }
+    if (!playerId && match.es_bye) return <div className="bp-player bp-bye"><span>BYE</span></div>;
+    if (!playerId) return <div className="bp-player bp-tbd"><span>Por definir</span></div>;
 
     return (
       <div className={`bp-player ${isWinner ? "bp-winner" : ""} ${isLoser ? "bp-loser" : ""} ${isMe ? "bp-me" : ""}`}>
-        <div className="bp-avatar">
-          {playerName?.[0]?.toUpperCase() ?? "?"}
-        </div>
+        <div className="bp-avatar">{playerName?.[0]?.toUpperCase() ?? "?"}</div>
         <span className="bp-name">{playerName}</span>
         {isWinner && <span className="bp-crown">👑</span>}
-        {myReport === playerId && !isWinner && <span className="bp-reported" title="Tu reporte">✔</span>}
       </div>
     );
   };
 
   const renderActions = (match: Match) => {
+    // Only admins/organizers can decide; no player self-report
     if (match.estado === "confirmado" || match.es_bye || match.estado === "esperando") return null;
     if (!match.jugador1_id || !match.jugador2_id) return null;
-
-    const amJ1 = myId === match.jugador1_id;
-    const amJ2 = myId === match.jugador2_id;
-    const amPlayer = amJ1 || amJ2;
-    const myReported = amJ1 ? match.reporte_j1 : match.reporte_j2;
+    if (!canDecide) return (
+      <p className="bp-report-pending">⏳ Esperando decisión del administrador...</p>
+    );
 
     return (
       <div className="bp-actions">
-        {/* Jugadores reportan ganador */}
-        {amPlayer && !myReported && (
-          <div className="bp-report-section">
-            <p className="bp-report-label">¿Quién ganó?</p>
-            <div className="bp-report-btns">
-              <button
-                className="bp-btn-report"
-                onClick={() => handleReport(match, match.jugador1_id!)}
-              >
-                {match.jugador1_nombre}
-              </button>
-              <button
-                className="bp-btn-report"
-                onClick={() => handleReport(match, match.jugador2_id!)}
-              >
-                {match.jugador2_nombre}
-              </button>
-            </div>
-          </div>
+        {match.estado === "en_disputa" && (
+          <p className="bp-dispute">⚠️ Resultado en disputa</p>
         )}
-        {amPlayer && myReported && (
-          <p className="bp-report-pending">
-            ⏳ Reporte enviado. Esperando al otro jugador...
-          </p>
-        )}
-        {/* Organizador / Admin decide */}
-        {(isOrganizer || isAdmin) && (
-          <button
-            className="bp-btn-decide"
-            onClick={() => setDecidingMatch(match)}
-          >
-            ⚖️ {isAdmin ? "Decidir (Admin)" : "Decidir ganador"}
-          </button>
-        )}
-        {/* Disputa entre reportes */}
-        {match.estado === "en_disputa" && match.reporte_j1 && match.reporte_j2 && match.reporte_j1 !== match.reporte_j2 && (
-          <p className="bp-dispute">⚠️ Reportes en conflicto — requiere decisión del organizador</p>
-        )}
+        <button className="bp-btn-decide" onClick={() => setDecidingMatch(match)}>
+          ⚖️ {isAdmin ? "Decidir (Admin)" : "Decidir ganador"}
+        </button>
       </div>
     );
   };
@@ -241,12 +227,6 @@ const TournamentBracket = () => {
 
   return (
     <main className="bracket-page">
-      {toast && (
-        <div className={`bracket-toast ${toast.type}`}>
-          {toast.type === "success" ? "✅" : "❌"} {toast.msg}
-        </div>
-      )}
-
       {/* Header */}
       <section className="bracket-hero">
         <div className="bracket-hero-overlay" />
@@ -257,12 +237,18 @@ const TournamentBracket = () => {
           <h1>🏆 {torneo?.nombre}</h1>
           <p>Sistema de Bracket — Eliminación Simple</p>
           {canGenerate && (
+            <button className="bracket-generate-btn" onClick={handleGenerate} disabled={generating}>
+              {generating ? "Generando..." : "⚡ Generar Bracket"}
+            </button>
+          )}
+          {canDecide && torneo?.bracket_iniciado === 1 && torneo?.estado !== "finalizado" && (
             <button
               className="bracket-generate-btn"
-              onClick={handleGenerate}
+              style={{ background: "linear-gradient(135deg, #b45309, #92400e)", marginTop: "10px" }}
+              onClick={() => setShowResetConfirm(true)}
               disabled={generating}
             >
-              {generating ? "Generando..." : "⚡ Generar Bracket"}
+              {generating ? "Procesando..." : "🔄 Rehacer Bracket"}
             </button>
           )}
         </div>
@@ -270,13 +256,38 @@ const TournamentBracket = () => {
 
       {/* Banner campeón */}
       {champion && (
-        <div className="champion-banner">
-          <div className="champion-trophy">🏆</div>
-          <div className="champion-info">
-            <p className="champion-label">CAMPEÓN DEL TORNEO</p>
-            <h2 className="champion-name">{champion.nombre}</h2>
+        <div className="champion-banner" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {torneo?.estado === "finalizado" && (
+            <div style={{
+              background: "linear-gradient(135deg, #065f46, #047857)",
+              color: "#6ee7b7",
+              padding: "6px 20px",
+              borderRadius: "20px",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              letterSpacing: "2px",
+              marginBottom: "12px",
+              textTransform: "uppercase"
+            }}>✅ TORNEO FINALIZADO</div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="champion-trophy">🏆</div>
+            <div className="champion-info">
+              <p className="champion-label">CAMPEÓN DEL TORNEO</p>
+              <h2 className="champion-name">{champion.nombre}</h2>
+            </div>
+            <div className="champion-trophy">🏆</div>
           </div>
-          <div className="champion-trophy">🏆</div>
+          {canDecide && torneo?.estado !== "finalizado" && (
+            <button
+              className="bracket-generate-btn"
+              style={{ marginTop: "20px", background: "#e11d48" }}
+              onClick={() => setShowFinalizeConfirm(true)}
+              disabled={finalizing}
+            >
+              {finalizing ? "Finalizando..." : "🏁 Finalizar Torneo"}
+            </button>
+          )}
         </div>
       )}
 
@@ -299,9 +310,7 @@ const TournamentBracket = () => {
           <div className="bracket-rounds">
             {roundNumbers.map(ronda => (
               <div key={ronda} className="bracket-round">
-                <div className="bracket-round-label">
-                  {roundNames(totalRounds, ronda)}
-                </div>
+                <div className="bracket-round-label">{roundNames(totalRounds, ronda)}</div>
                 <div className="bracket-matches">
                   {(rounds[ronda] || []).map(match => (
                     <div
@@ -322,9 +331,7 @@ const TournamentBracket = () => {
                         </div>
                       )}
                       {match.estado === "confirmado" && match.ganador_nombre && (
-                        <div className="match-winner-chip">
-                          👑 Ganador: {match.ganador_nombre}
-                        </div>
+                        <div className="match-winner-chip">👑 Ganador: {match.ganador_nombre}</div>
                       )}
                       {renderActions(match)}
                     </div>
@@ -344,25 +351,135 @@ const TournamentBracket = () => {
             <p>Selecciona al jugador ganador de esta partida:</p>
             <div className="decide-options">
               {decidingMatch.jugador1_id && (
-                <button
-                  className="decide-btn"
-                  onClick={() => handleDecide(decidingMatch, decidingMatch.jugador1_id!)}
-                >
+                <button className="decide-btn" onClick={() => handleDecide(decidingMatch, decidingMatch.jugador1_id!)}>
                   <div className="decide-avatar">{decidingMatch.jugador1_nombre?.[0]?.toUpperCase()}</div>
                   {decidingMatch.jugador1_nombre}
                 </button>
               )}
               {decidingMatch.jugador2_id && (
-                <button
-                  className="decide-btn"
-                  onClick={() => handleDecide(decidingMatch, decidingMatch.jugador2_id!)}
-                >
+                <button className="decide-btn" onClick={() => handleDecide(decidingMatch, decidingMatch.jugador2_id!)}>
                   <div className="decide-avatar">{decidingMatch.jugador2_nombre?.[0]?.toUpperCase()}</div>
                   {decidingMatch.jugador2_nombre}
                 </button>
               )}
             </div>
             <button className="decide-cancel" onClick={() => setDecidingMatch(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar reset de bracket */}
+      {showResetConfirm && (
+        <div className="modal-overlay" onClick={() => setShowResetConfirm(false)}>
+          <div className="decide-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: "480px" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "12px" }}>⚠️</div>
+            <h2 style={{ color: "#f97316", marginBottom: "12px" }}>¿Rehacer el Bracket?</h2>
+            <div style={{
+              background: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              borderRadius: "12px",
+              padding: "16px",
+              marginBottom: "20px",
+              textAlign: "left"
+            }}>
+              <p style={{ color: "#fca5a5", fontWeight: 700, marginBottom: "8px" }}>
+                🚨 Esta acción NO se puede deshacer
+              </p>
+              <ul style={{ color: "#94a3b8", fontSize: "0.9rem", paddingLeft: "18px", lineHeight: "1.8" }}>
+                <li>Se eliminarán <strong style={{ color: "#e2e8f0" }}>todos los resultados</strong> actuales</li>
+                <li>Se eliminarán <strong style={{ color: "#e2e8f0" }}>todas las partidas</strong> registradas</li>
+                <li>El bracket se generará desde cero con un <strong style={{ color: "#e2e8f0" }}>nuevo sorteo aleatorio</strong></li>
+                <li>Los jugadores inscritos <strong style={{ color: "#e2e8f0" }}>permanecerán</strong> en el torneo</li>
+              </ul>
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "24px" }}>
+              ¿Estás seguro de que deseas continuar?
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button
+                className="decide-cancel"
+                onClick={() => setShowResetConfirm(false)}
+                style={{ flex: 1 }}
+              >
+                ✕ Cancelar
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={generating}
+                style={{
+                  flex: 1,
+                  padding: "12px 20px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #dc2626, #991b1b)",
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: "0.95rem",
+                  cursor: "pointer",
+                  transition: "opacity 0.2s"
+                }}
+              >
+                🔄 Sí, rehacer bracket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar finalización del torneo */}
+      {showFinalizeConfirm && (
+        <div className="modal-overlay" onClick={() => setShowFinalizeConfirm(false)}>
+          <div className="decide-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: "460px", textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "12px" }}>🏁</div>
+            <h2 style={{ color: "#e11d48", marginBottom: "12px" }}>¿Finalizar el Torneo?</h2>
+            <div style={{
+              background: "rgba(225, 29, 72, 0.1)",
+              border: "1px solid rgba(225, 29, 72, 0.35)",
+              borderRadius: "12px",
+              padding: "16px",
+              marginBottom: "20px",
+              textAlign: "left"
+            }}>
+              <p style={{ color: "#fda4af", fontWeight: 700, marginBottom: "8px" }}>
+                Esta acción marcará el torneo como concluido.
+              </p>
+              <ul style={{ color: "#94a3b8", fontSize: "0.9rem", paddingLeft: "18px", lineHeight: "1.8" }}>
+                <li>El torneo cambiará de estado a <strong style={{ color: "#e2e8f0" }}>Finalizado</strong></li>
+                <li>Se registrará oficialmente al <strong style={{ color: "#e2e8f0" }}>campeón actual</strong></li>
+                <li>No se podrán generar más cambios en el bracket</li>
+              </ul>
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "24px" }}>
+              ¿Confirmas que deseas finalizar el torneo?
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button
+                className="decide-cancel"
+                onClick={() => setShowFinalizeConfirm(false)}
+                style={{ flex: 1 }}
+              >
+                ✕ Cancelar
+              </button>
+              <button
+                onClick={handleFinalizarTorneo}
+                disabled={finalizing}
+                style={{
+                  flex: 1,
+                  padding: "12px 20px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #e11d48, #9f1239)",
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: "0.95rem",
+                  cursor: finalizing ? "not-allowed" : "pointer",
+                  opacity: finalizing ? 0.6 : 1,
+                  transition: "opacity 0.2s"
+                }}
+              >
+                {finalizing ? "Finalizando..." : "🏆 Sí, finalizar torneo"}
+              </button>
+            </div>
           </div>
         </div>
       )}
