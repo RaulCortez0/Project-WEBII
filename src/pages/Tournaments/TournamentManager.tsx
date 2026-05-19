@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import "./TournamentManager.css";
 
 const API_URL = "http://localhost:3001";
 
 const TournamentManager = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, user } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showLoginWarning, setShowLoginWarning] = useState(false);
   const [tournaments, setTournaments] = useState<any[]>([]);
